@@ -40,6 +40,6 @@ services:
       MARIADB_USER: app
       MARIADB_PASSWORD: app
     ports:
-      - "3306:3307"
+      - "3307:3306"
     # networks:
     #   - app-network
