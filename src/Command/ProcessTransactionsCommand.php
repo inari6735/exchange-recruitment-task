@@ -51,9 +51,9 @@ final class ProcessTransactionsCommand extends Command
             $io->definitionList(
                 ['From wallet' => $transaction->getFromWalletId()],
                 ['To wallet' => $transaction->getToWalletId()],
-                ['Amount' => sprintf('%s %s → %s %s', $transaction->getFromAmount(), $transaction->getFromCurrency()->value, $transaction->getToAmount(), $transaction->getToCurrency()->value)],
-                ['Exchange rate' => $transaction->getExchangeRate()],
-                ['Spread' => $transaction->getSpread()],
+                ['Amount' => sprintf('%s %s → %s %s', $transaction->getFromAmount()->toString(), $transaction->getFromCurrency()->value, $transaction->getToAmount()->toString(), $transaction->getToCurrency()->value)],
+                ['Exchange rate' => $transaction->getExchangeRate()->toString()],
+                ['Spread' => $transaction->getSpread()->toString()],
                 ['Created at' => $transaction->getCreatedAt()->format('Y-m-d H:i:s')],
             );
 

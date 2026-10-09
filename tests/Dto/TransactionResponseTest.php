@@ -8,6 +8,8 @@ use App\Dto\TransactionResponse;
 use App\Entity\Transaction;
 use App\Enum\Currency;
 use App\Enum\TransactionStatus;
+use App\ValueObject\ExchangeRate;
+use App\ValueObject\Money;
 use DateTimeImmutable;
 use DateTimeInterface;
 use PHPUnit\Framework\TestCase;
@@ -20,12 +22,10 @@ class TransactionResponseTest extends TestCase
             id: 7,
             fromWalletId: 1,
             toWalletId: 2,
-            fromAmount: '100.0000',
-            toAmount: '25.1234',
-            fromCurrency: Currency::PLN,
-            toCurrency: Currency::EUR,
-            spread: '0.1260',
-            exchangeRate: '0.250000',
+            fromAmount: Money::of('100.00', Currency::PLN),
+            toAmount: Money::of('25.12', Currency::EUR),
+            spread: Money::of('0.13', Currency::EUR),
+            exchangeRate: ExchangeRate::of(Currency::PLN, Currency::EUR, '0.25'),
             status: $status,
             requiresAntiFraudCheck: false,
             antiFraudCheckedAt: null,
@@ -40,11 +40,11 @@ class TransactionResponseTest extends TestCase
         self::assertSame(7, $data['id']);
         self::assertSame(1, $data['fromWalletId']);
         self::assertSame(2, $data['toWalletId']);
-        self::assertSame('100.0000', $data['fromAmount']);
-        self::assertSame('25.1234', $data['toAmount']);
+        self::assertSame('100.00', $data['fromAmount']);
+        self::assertSame('25.12', $data['toAmount']);
         self::assertSame('PLN', $data['fromCurrency']);
         self::assertSame('EUR', $data['toCurrency']);
-        self::assertSame('0.1260', $data['spread']);
+        self::assertSame('0.13', $data['spread']);
         self::assertSame('0.250000', $data['exchangeRate']);
         self::assertSame('pending', $data['status']);
         self::assertSame(
@@ -66,12 +66,10 @@ class TransactionResponseTest extends TestCase
             id: null,
             fromWalletId: 3,
             toWalletId: 4,
-            fromAmount: '50.0000',
-            toAmount: '50.0000',
-            fromCurrency: Currency::USD,
-            toCurrency: Currency::USD,
-            spread: '0.0000',
-            exchangeRate: '1.000000',
+            fromAmount: Money::of('50.00', Currency::USD),
+            toAmount: Money::of('50.00', Currency::USD),
+            spread: Money::zero(Currency::USD),
+            exchangeRate: ExchangeRate::of(Currency::USD, Currency::USD, '1'),
             status: TransactionStatus::PENDING,
             requiresAntiFraudCheck: false,
             antiFraudCheckedAt: null,

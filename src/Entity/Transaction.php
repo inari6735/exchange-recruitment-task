@@ -6,6 +6,9 @@ namespace App\Entity;
 
 use App\Enum\Currency;
 use App\Enum\TransactionStatus;
+use App\Exception\CurrencyMismatchException;
+use App\ValueObject\ExchangeRate;
+use App\ValueObject\Money;
 use DateTimeImmutable;
 
 class Transaction
@@ -14,28 +17,35 @@ class Transaction
         private ?int $id,
         private readonly int $fromWalletId,
         private readonly int $toWalletId,
-        private readonly string $fromAmount,
-        private readonly string $toAmount,
-        private readonly Currency $fromCurrency,
-        private readonly Currency $toCurrency,
-        private readonly string $spread,
-        private readonly string $exchangeRate,
+        private readonly Money $fromAmount,
+        private readonly Money $toAmount,
+        private readonly Money $spread,
+        private readonly ExchangeRate $exchangeRate,
         private TransactionStatus $status,
         private readonly bool $requiresAntiFraudCheck,
         private ?DateTimeImmutable $antiFraudCheckedAt,
         private readonly DateTimeImmutable $createdAt,
     ) {
+        if ($exchangeRate->getFrom() !== $fromAmount->getCurrency()) {
+            throw new CurrencyMismatchException($fromAmount->getCurrency(), $exchangeRate->getFrom());
+        }
+
+        if ($exchangeRate->getTo() !== $toAmount->getCurrency()) {
+            throw new CurrencyMismatchException($toAmount->getCurrency(), $exchangeRate->getTo());
+        }
+
+        if ($spread->getCurrency() !== $toAmount->getCurrency()) {
+            throw new CurrencyMismatchException($toAmount->getCurrency(), $spread->getCurrency());
+        }
     }
 
     public static function create(
         int $fromWalletId,
         int $toWalletId,
-        string $fromAmount,
-        string $toAmount,
-        Currency $fromCurrency,
-        Currency $toCurrency,
-        string $spread,
-        string $exchangeRate,
+        Money $fromAmount,
+        Money $toAmount,
+        Money $spread,
+        ExchangeRate $exchangeRate,
         bool $requiresAntiFraudCheck,
     ): self {
         return new self(
@@ -44,8 +54,6 @@ class Transaction
             toWalletId: $toWalletId,
             fromAmount: $fromAmount,
             toAmount: $toAmount,
-            fromCurrency: $fromCurrency,
-            toCurrency: $toCurrency,
             spread: $spread,
             exchangeRate: $exchangeRate,
             status: $requiresAntiFraudCheck
@@ -72,32 +80,32 @@ class Transaction
         return $this->toWalletId;
     }
 
-    public function getFromAmount(): string
+    public function getFromAmount(): Money
     {
         return $this->fromAmount;
     }
 
-    public function getToAmount(): string
+    public function getToAmount(): Money
     {
         return $this->toAmount;
     }
 
     public function getFromCurrency(): Currency
     {
-        return $this->fromCurrency;
+        return $this->fromAmount->getCurrency();
     }
 
     public function getToCurrency(): Currency
     {
-        return $this->toCurrency;
+        return $this->toAmount->getCurrency();
     }
 
-    public function getSpread(): string
+    public function getSpread(): Money
     {
         return $this->spread;
     }
 
-    public function getExchangeRate(): string
+    public function getExchangeRate(): ExchangeRate
     {
         return $this->exchangeRate;
     }
