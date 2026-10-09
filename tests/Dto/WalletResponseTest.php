@@ -7,6 +7,7 @@ namespace App\Tests\Dto;
 use App\Dto\WalletResponse;
 use App\Entity\Wallet;
 use App\Enum\Currency;
+use App\Tests\Support\WalletFixture;
 use App\ValueObject\Money;
 use DateTimeImmutable;
 use DateTimeInterface;
@@ -23,6 +24,8 @@ class WalletResponseTest extends TestCase
         self::assertNull($data['id']);
         self::assertSame('PLN', $data['currency']);
         self::assertSame('0.00', $data['balance']);
+        self::assertSame('0.00', $data['reserved']);
+        self::assertSame('0.00', $data['available']);
         self::assertFalse($data['isBlocked']);
         self::assertNull($data['lastActivityAt']);
     }
@@ -56,5 +59,16 @@ class WalletResponseTest extends TestCase
         $data = new WalletResponse($wallet)->jsonSerialize();
 
         self::assertSame('1250', $data['balance']);
+    }
+
+    public function testJsonSerializeReservedAndAvailable(): void
+    {
+        $wallet = WalletFixture::create(3, 1, Currency::PLN, '100.00', '30.00');
+
+        $data = new WalletResponse($wallet)->jsonSerialize();
+
+        self::assertSame('100.00', $data['balance']);
+        self::assertSame('30.00', $data['reserved']);
+        self::assertSame('70.00', $data['available']);
     }
 }
