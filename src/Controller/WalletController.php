@@ -82,4 +82,12 @@ final class WalletController extends AbstractController
 
         return new JsonResponse(new WalletResponse($wallet));
     }
+
+    #[Route('/{id}', requirements: ['id' => '\d{1,18}'], methods: ['DELETE'])]
+    public function close(int $id, #[CurrentUser] User $user): Response
+    {
+        $this->walletService->closeWallet($user->getIdNotNull(), $id);
+
+        return new Response(status: Response::HTTP_NO_CONTENT);
+    }
 }
