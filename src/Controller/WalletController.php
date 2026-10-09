@@ -8,6 +8,7 @@ use App\Dto\TransactionResponse;
 use App\Dto\WalletResponse;
 use App\Entity\User;
 use App\Enum\Currency;
+use App\Exception\InvalidMoneyAmountException;
 use App\Exception\WalletAlreadyExistsException;
 use App\Exception\WalletBlockedException;
 use App\Exception\WalletNotFoundException;
@@ -15,6 +16,8 @@ use App\Repository\WalletRepositoryInterface;
 use App\Service\DepositService;
 use App\Service\TransferService;
 use App\Service\WalletService;
+use App\ValueObject\Money;
+use BcMath\Number;
 use JsonException;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -84,7 +87,8 @@ final class WalletController extends AbstractController
             }
         }
 
-        if (!is_numeric($data['amount']) || (float) $data['amount'] <= 0) {
+        $amount = self::parsePositiveAmount($data['amount']);
+        if (null === $amount) {
             return new JsonResponse(['error' => 'Amount must be a positive number.'], Response::HTTP_BAD_REQUEST);
         }
 
@@ -93,10 +97,12 @@ final class WalletController extends AbstractController
                 $user->getIdNotNull(),
                 (int) $data['fromWalletId'],
                 (int) $data['toWalletId'],
-                (string) $data['amount'],
+                $amount,
             );
         } catch (WalletNotFoundException $e) {
             return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_NOT_FOUND);
+        } catch (InvalidMoneyAmountException $e) {
+            return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
         }
 
         return new JsonResponse(new TransactionResponse($transaction), Response::HTTP_CREATED);
@@ -114,11 +120,12 @@ final class WalletController extends AbstractController
             return new JsonResponse(['error' => 'Missing required field: amount.'], Response::HTTP_BAD_REQUEST);
         }
 
-        if (!is_numeric($data['amount']) || (float) $data['amount'] <= 0) {
+        $amount = self::parsePositiveAmount($data['amount']);
+        if (null === $amount) {
             return new JsonResponse(['error' => 'Amount must be a positive number.'], Response::HTTP_BAD_REQUEST);
         }
 
-        if ((float) $data['amount'] > DepositService::MAX_AMOUNT) {
+        if (new Number($amount)->compare(DepositService::MAX_AMOUNT) > 0) {
             return new JsonResponse(['error' => sprintf('Amount cannot exceed %s.', DepositService::MAX_AMOUNT)], Response::HTTP_BAD_REQUEST);
         }
 
@@ -126,14 +133,33 @@ final class WalletController extends AbstractController
             $wallet = $this->depositService->deposit(
                 $user->getIdNotNull(),
                 $id,
-                (string) $data['amount'],
+                $amount,
             );
         } catch (WalletNotFoundException $e) {
             return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_NOT_FOUND);
         } catch (WalletBlockedException $e) {
             return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (InvalidMoneyAmountException $e) {
+            return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
         }
 
         return new JsonResponse(new WalletResponse($wallet));
+    }
+
+    /**
+     * Accepts a decimal string or a JSON number; returns it as a decimal string when it is positive, null otherwise.
+     * Currency precision is validated later by Money::of() in the service.
+     */
+    private static function parsePositiveAmount(mixed $amount): ?string
+    {
+        if (is_int($amount) || is_float($amount)) {
+            $amount = (string) $amount;
+        }
+
+        if (!is_string($amount) || !Money::isValidFormat($amount)) {
+            return null;
+        }
+
+        return new Number($amount)->compare(0) > 0 ? $amount : null;
     }
 }
