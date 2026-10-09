@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Entity\Transaction;
+use App\Exception\InsufficientFundsException;
 use App\Exception\InvalidMoneyAmountException;
+use App\Exception\SameWalletTransferException;
+use App\Exception\WalletBlockedException;
 use App\Exception\WalletNotFoundException;
+use App\Repository\TransactionManagerInterface;
 use App\Repository\TransactionRepositoryInterface;
 use App\Repository\WalletRepositoryInterface;
 use App\ValueObject\Money;
@@ -14,19 +18,24 @@ use RoundingMode;
 
 readonly class TransferService
 {
-    public const string ANTI_FRAUD_THRESHOLD = '15000';
-
     public function __construct(
         private WalletRepositoryInterface $walletRepository,
         private TransactionRepositoryInterface $transactionRepository,
         private ExchangeRateService $exchangeRateService,
         private SpreadService $spreadService,
+        private TransactionLimits $transactionLimits,
+        private TransactionManagerInterface $transactionManager,
     ) {
     }
 
     /**
+     * Places a transfer: reserves the amount on the source wallet; balances change only when it is completed.
+     *
+     * @throws SameWalletTransferException
      * @throws WalletNotFoundException
      * @throws InvalidMoneyAmountException
+     * @throws WalletBlockedException
+     * @throws InsufficientFundsException
      */
     public function transfer(
         int $userId,
@@ -34,6 +43,19 @@ readonly class TransferService
         int $toWalletId,
         string $fromAmount,
     ): Transaction {
+        if ($fromWalletId === $toWalletId) {
+            throw new SameWalletTransferException();
+        }
+
+        return $this->transactionManager->transactional(
+            fn (): Transaction => $this->placeTransfer($userId, $fromWalletId, $toWalletId, $fromAmount),
+        );
+    }
+
+    private function placeTransfer(int $userId, int $fromWalletId, int $toWalletId, string $fromAmount): Transaction
+    {
+        $this->walletRepository->lockForUpdate($fromWalletId, $toWalletId);
+
         $fromWallet = $this->walletRepository->findById($fromWalletId);
         if (null === $fromWallet || $fromWallet->getUserId() !== $userId) {
             throw new WalletNotFoundException($fromWalletId);
@@ -48,16 +70,23 @@ readonly class TransferService
         $toCurrency = $toWallet->getCurrency();
 
         $fromMoney = Money::of($fromAmount, $fromCurrency);
+
+        if ($toWallet->isBlocked()) {
+            throw new WalletBlockedException($toWalletId);
+        }
+
+        if ($fromWallet->isBlocked()) {
+            throw new WalletBlockedException($fromWalletId);
+        }
+
+        $fromWallet->reserve($fromMoney);
+
         $exchangeRate = $this->exchangeRateService->getExchangeRateBetween($fromCurrency, $toCurrency);
         $grossToAmount = $fromMoney->convertTo($toCurrency, $exchangeRate, RoundingMode::HalfAwayFromZero);
         $spread = $this->spreadService->calculateSpread($grossToAmount, $fromCurrency, $toCurrency);
         $toAmount = $grossToAmount->subtract($spread);
 
-        $fromWallet->setBalance($fromWallet->getBalance()->subtract($fromMoney));
-        $toWallet->setBalance($toWallet->getBalance()->add($toAmount));
-
         $this->walletRepository->save($fromWallet);
-        $this->walletRepository->save($toWallet);
 
         $transaction = Transaction::create(
             fromWalletId: $fromWalletId,
@@ -66,7 +95,7 @@ readonly class TransferService
             toAmount: $toAmount,
             spread: $spread,
             exchangeRate: $exchangeRate,
-            requiresAntiFraudCheck: $toAmount->isGreaterThan(Money::of(self::ANTI_FRAUD_THRESHOLD, $toCurrency)),
+            requiresAntiFraudCheck: $fromMoney->isGreaterThan($this->transactionLimits->antiFraudThreshold($fromCurrency)),
         );
 
         $this->transactionRepository->save($transaction);

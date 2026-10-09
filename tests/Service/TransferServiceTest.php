@@ -8,13 +8,19 @@ use App\Entity\Transaction;
 use App\Entity\Wallet;
 use App\Enum\Currency;
 use App\Enum\TransactionStatus;
+use App\Exception\InsufficientFundsException;
 use App\Exception\InvalidMoneyAmountException;
+use App\Exception\SameWalletTransferException;
+use App\Exception\WalletBlockedException;
 use App\Exception\WalletNotFoundException;
 use App\Repository\TransactionRepositoryInterface;
 use App\Repository\WalletRepositoryInterface;
 use App\Service\ExchangeRateService;
 use App\Service\SpreadService;
 use App\Service\TransferService;
+use App\Tests\Support\ImmediateTransactionManager;
+use App\Tests\Support\TransactionLimitsFactory;
+use App\Tests\Support\WalletFixture;
 use App\ValueObject\ExchangeRate;
 use App\ValueObject\Money;
 use Generator;
@@ -29,6 +35,7 @@ class TransferServiceTest extends TestCase
     private TransactionRepositoryInterface $transactionRepository;
     private ExchangeRateService $exchangeRateService;
     private SpreadService $spreadService;
+    private ImmediateTransactionManager $transactionManager;
     private TransferService $transferService;
 
     protected function setUp(): void
@@ -37,53 +44,33 @@ class TransferServiceTest extends TestCase
         $this->transactionRepository = $this->createMock(TransactionRepositoryInterface::class);
         $this->exchangeRateService = $this->createMock(ExchangeRateService::class);
         $this->spreadService = $this->createMock(SpreadService::class);
+        $this->transactionManager = new ImmediateTransactionManager();
 
-        $this->transferService = new TransferService(
-            $this->walletRepository,
-            $this->transactionRepository,
-            $this->exchangeRateService,
-            $this->spreadService,
-        );
+        $this->transferService = $this->makeService($this->exchangeRateService, $this->spreadService);
     }
 
+    /**
+     * Intent kept from the original test: placing a transfer does not change any balance — it only reserves funds.
+     */
     public function testTransferSuccessfully(): void
     {
         $userId = 1;
         $fromWallet = $this->createMock(Wallet::class);
+        $fromWallet->method('getCurrency')->willReturn(Currency::PLN);
+        $fromWallet->method('getUserId')->willReturn($userId);
         $fromWallet
-            ->method('getCurrency')
-            ->willReturn(Currency::PLN);
-        $fromWallet
-            ->expects($this->atLeastOnce())
-            ->method('getBalance')
-            ->willReturnOnConsecutiveCalls(
-                Money::of('5000.00', Currency::PLN),
-                Money::of('4000.00', Currency::PLN),
-            );
-        $fromWallet
-            ->method('getUserId')
-            ->willReturn($userId);
-        $fromWallet
-            ->expects($this->never())
-            ->method('setBalance');
+            ->expects($this->once())
+            ->method('reserve')
+            ->with($this->callback(static fn (Money $amount): bool => Currency::PLN === $amount->getCurrency() && '1000.00' === $amount->toString()));
+        $fromWallet->expects($this->never())->method('settle');
+        $fromWallet->expects($this->never())->method('credit');
         $toWallet = $this->createMock(Wallet::class);
-        $toWallet
-            ->method('getCurrency')
-            ->willReturn(Currency::EUR);
-        $toWallet
-            ->expects($this->atLeastOnce())
-            ->method('getBalance')
-            ->willReturnOnConsecutiveCalls(
-                Money::of('100.00', Currency::EUR),
-                Money::of('349.00', Currency::EUR),
-            );
-        $toWallet
-            ->method('getUserId')
-            ->willReturn($userId);
-        $toWallet
-            ->expects($this->never())
-            ->method('setBalance');
+        $toWallet->method('getCurrency')->willReturn(Currency::EUR);
+        $toWallet->method('getUserId')->willReturn($userId);
+        $toWallet->expects($this->never())->method('credit');
+        $toWallet->expects($this->never())->method('reserve');
 
+        $this->walletRepository->expects(self::once())->method('lockForUpdate')->with(1, 2);
         $this->walletRepository
             ->expects(self::exactly(2))
             ->method('findById')
@@ -109,9 +96,9 @@ class TransferServiceTest extends TestCase
             ->willReturn(Money::of('1.00', Currency::EUR));
 
         $this->walletRepository
-            ->expects(self::exactly(2))
+            ->expects(self::once())
             ->method('save')
-            ->with($this->isInstanceOf(Wallet::class));
+            ->with(self::identicalTo($fromWallet));
 
         $this->transactionRepository
             ->expects(self::once())
@@ -120,8 +107,6 @@ class TransferServiceTest extends TestCase
 
         $transaction = $this->transferService->transfer($userId, 1, 2, '1000.00');
 
-        self::assertSame('4000.00', $fromWallet->getBalance()->toString());
-        self::assertSame('349.00', $toWallet->getBalance()->toString());
         self::assertSame(TransactionStatus::PENDING, $transaction->getStatus());
         self::assertFalse($transaction->requiresAntiFraudCheck());
         self::assertSame('1000.00', $transaction->getFromAmount()->toString());
@@ -130,25 +115,42 @@ class TransferServiceTest extends TestCase
         self::assertSame('1.00', $transaction->getSpread()->toString());
         self::assertSame(Currency::PLN, $transaction->getFromCurrency());
         self::assertSame(Currency::EUR, $transaction->getToCurrency());
+        self::assertSame(1, $this->transactionManager->calls);
+    }
+
+    public function testTransferLocksWalletsBeforeReadingThem(): void
+    {
+        $calls = [];
+        $wallets = [1 => WalletFixture::create(1, 1, Currency::PLN, '100.00'), 2 => WalletFixture::create(2, 1, Currency::EUR)];
+
+        $this->walletRepository
+            ->method('lockForUpdate')
+            ->willReturnCallback(static function () use (&$calls): void {
+                $calls[] = 'lock';
+            });
+        $this->walletRepository
+            ->method('findById')
+            ->willReturnCallback(static function (int $id) use (&$calls, $wallets): ?Wallet {
+                $calls[] = 'find';
+
+                return $wallets[$id] ?? null;
+            });
+
+        $this->makeServiceWithRealRates()->transfer(1, 1, 2, '10.00');
+
+        self::assertSame(['lock', 'find', 'find'], $calls);
     }
 
     #[DataProvider('referenceTransferProvider')]
-    public function testTransferCalculatesAmountsWithRealRatesAndSpread(
+    public function testTransferReservesFundsAndCalculatesAmounts(
         Currency $toCurrency,
         string $expectedRate,
         string $expectedSpread,
         string $expectedToAmount,
     ): void {
-        $fromWallet = Wallet::create(1, Currency::PLN);
-        $fromWallet->setBalance(Money::of('500.00', Currency::PLN));
-        $toWallet = Wallet::create(1, $toCurrency);
-
-        $this->walletRepository
-            ->method('findById')
-            ->willReturnMap([
-                [1, $fromWallet],
-                [2, $toWallet],
-            ]);
+        $fromWallet = WalletFixture::create(1, 1, Currency::PLN, '500.00');
+        $toWallet = WalletFixture::create(2, 1, $toCurrency);
+        $this->givenWallets($fromWallet, $toWallet);
 
         $transaction = $this->makeServiceWithRealRates()->transfer(1, 1, 2, '100.00');
 
@@ -156,9 +158,10 @@ class TransferServiceTest extends TestCase
         self::assertSame($expectedRate, $transaction->getExchangeRate()->toString());
         self::assertSame($expectedSpread, $transaction->getSpread()->toString());
         self::assertSame($expectedToAmount, $transaction->getToAmount()->toString());
-        self::assertSame($toCurrency, $transaction->getToCurrency());
-        self::assertSame('400.00', $fromWallet->getBalance()->toString());
-        self::assertSame($expectedToAmount, $toWallet->getBalance()->toString());
+        self::assertSame('500.00', $fromWallet->getBalance()->toString());
+        self::assertSame('100.00', $fromWallet->getReserved()->toString());
+        self::assertSame('400.00', $fromWallet->getAvailable()->toString());
+        self::assertSame(Money::zero($toCurrency)->toString(), $toWallet->getBalance()->toString());
         self::assertSame(TransactionStatus::PENDING, $transaction->getStatus());
     }
 
@@ -170,35 +173,103 @@ class TransferServiceTest extends TestCase
         yield 'PLN to EUR' => [Currency::EUR, '0.235910', '0.16', '23.43'];
     }
 
-    public function testTransferFlagsAntiFraudCheckWhenToAmountExceedsThreshold(): void
+    #[DataProvider('antiFraudProvider')]
+    public function testAntiFraudThresholdUsesSourceCurrency(Currency $from, Currency $to, string $amount, bool $expectedReview): void
     {
-        $fromWallet = Wallet::create(1, Currency::PLN);
-        $toWallet = Wallet::create(1, Currency::HUF);
+        $this->givenWallets(WalletFixture::create(1, 1, $from, '2000000'), WalletFixture::create(2, 1, $to));
 
-        $this->walletRepository
-            ->method('findById')
-            ->willReturnMap([
-                [1, $fromWallet],
-                [2, $toWallet],
-            ]);
+        $transaction = $this->makeServiceWithRealRates()->transfer(1, 1, 2, $amount);
 
-        // 200 PLN → 16949.15 HUF − 178.41 spread = 16770.74 HUF > 15000
-        $transaction = $this->makeServiceWithRealRates()->transfer(1, 1, 2, '200.00');
+        self::assertSame($expectedReview, $transaction->requiresAntiFraudCheck());
+        self::assertSame(
+            $expectedReview ? TransactionStatus::FRAUD_REVIEW : TransactionStatus::PENDING,
+            $transaction->getStatus(),
+        );
+    }
 
-        self::assertSame('16770.74', $transaction->getToAmount()->toString());
-        self::assertTrue($transaction->requiresAntiFraudCheck());
-        self::assertSame(TransactionStatus::FRAUD_REVIEW, $transaction->getStatus());
+    public static function antiFraudProvider(): Generator
+    {
+        yield 'PLN exactly at threshold' => [Currency::PLN, Currency::EUR, '15000.00', false];
+        yield 'PLN just above threshold' => [Currency::PLN, Currency::EUR, '15000.01', true];
+        yield 'USD just above its own threshold' => [Currency::USD, Currency::PLN, '4000.01', true];
+        yield 'JPY just above its own threshold' => [Currency::JPY, Currency::PLN, '650001', true];
+        // Old rule compared the target amount (16770.74 HUF > 15000) — the source amount 200 PLN is now below the PLN threshold.
+        yield 'PLN to HUF large target amount' => [Currency::PLN, Currency::HUF, '200.00', false];
+    }
+
+    public function testTransferOfExactlyAvailableAmountSucceeds(): void
+    {
+        $fromWallet = WalletFixture::create(1, 1, Currency::PLN, '100.00', '30.00');
+        $this->givenWallets($fromWallet, WalletFixture::create(2, 1, Currency::EUR));
+
+        $this->makeServiceWithRealRates()->transfer(1, 1, 2, '70.00');
+
+        self::assertSame('100.00', $fromWallet->getReserved()->toString());
+        self::assertSame('0.00', $fromWallet->getAvailable()->toString());
+    }
+
+    public function testTransferThrowsWhenFundsAreInsufficient(): void
+    {
+        $this->givenWallets(WalletFixture::create(1, 1, Currency::PLN, '100.00', '30.00'), WalletFixture::create(2, 1, Currency::EUR));
+        $this->walletRepository->expects(self::never())->method('save');
+        $this->transactionRepository->expects(self::never())->method('save');
+
+        $this->expectException(InsufficientFundsException::class);
+        $this->expectExceptionMessage('Insufficient funds in wallet 1.');
+
+        $this->makeServiceWithRealRates()->transfer(1, 1, 2, '70.01');
+    }
+
+    public function testTransferFailsFromLegacyNegativeBalance(): void
+    {
+        $this->givenWallets(WalletFixture::create(1, 1, Currency::PLN, '-995.00'), WalletFixture::create(2, 1, Currency::EUR));
+
+        $this->expectException(InsufficientFundsException::class);
+
+        $this->makeServiceWithRealRates()->transfer(1, 1, 2, '1.00');
+    }
+
+    public function testTransferThrowsForSameWallet(): void
+    {
+        $this->walletRepository->expects(self::never())->method('findById');
+        $this->transactionRepository->expects(self::never())->method('save');
+
+        $this->expectException(SameWalletTransferException::class);
+        $this->expectExceptionMessage('Cannot transfer to the same wallet.');
+
+        $this->transferService->transfer(1, 1, 1, '10.00');
+    }
+
+    public function testTransferThrowsWhenSourceWalletIsBlocked(): void
+    {
+        $this->givenWallets(WalletFixture::create(1, 1, Currency::PLN, '100.00', blocked: true), WalletFixture::create(2, 1, Currency::EUR));
+        $this->transactionRepository->expects(self::never())->method('save');
+
+        $this->expectException(WalletBlockedException::class);
+        $this->expectExceptionMessage('Wallet 1 is blocked.');
+
+        $this->makeServiceWithRealRates()->transfer(1, 1, 2, '10.00');
+    }
+
+    public function testTransferThrowsWhenTargetWalletIsBlocked(): void
+    {
+        $fromWallet = WalletFixture::create(1, 1, Currency::PLN, '100.00');
+        $this->givenWallets($fromWallet, WalletFixture::create(2, 1, Currency::EUR, blocked: true));
+        $this->transactionRepository->expects(self::never())->method('save');
+
+        try {
+            $this->makeServiceWithRealRates()->transfer(1, 1, 2, '10.00');
+            self::fail('Expected WalletBlockedException.');
+        } catch (WalletBlockedException $e) {
+            self::assertSame('Wallet 2 is blocked.', $e->getMessage());
+        }
+
+        self::assertSame('0.00', $fromWallet->getReserved()->toString());
     }
 
     public function testTransferThrowsWhenAmountHasTooManyDecimalPlaces(): void
     {
-        $this->walletRepository
-            ->method('findById')
-            ->willReturnMap([
-                [1, Wallet::create(1, Currency::PLN)],
-                [2, Wallet::create(1, Currency::EUR)],
-            ]);
-
+        $this->givenWallets(WalletFixture::create(1, 1, Currency::PLN, '100.00'), WalletFixture::create(2, 1, Currency::EUR));
         $this->walletRepository->expects(self::never())->method('save');
         $this->transactionRepository->expects(self::never())->method('save');
 
@@ -210,14 +281,7 @@ class TransferServiceTest extends TestCase
 
     public function testTransferThrowsWhenAmountHasDecimalsForJpyWallet(): void
     {
-        $this->walletRepository
-            ->method('findById')
-            ->willReturnMap([
-                [1, Wallet::create(1, Currency::JPY)],
-                [2, Wallet::create(1, Currency::PLN)],
-            ]);
-
-        $this->walletRepository->expects(self::never())->method('save');
+        $this->givenWallets(WalletFixture::create(1, 1, Currency::JPY, '1000'), WalletFixture::create(2, 1, Currency::PLN));
         $this->transactionRepository->expects(self::never())->method('save');
 
         $this->expectException(InvalidMoneyAmountException::class);
@@ -233,7 +297,6 @@ class TransferServiceTest extends TestCase
             ->method('findById')
             ->with(99)
             ->willReturn(null);
-
         $this->transactionRepository->expects(self::never())->method('save');
 
         $this->expectException(WalletNotFoundException::class);
@@ -244,15 +307,12 @@ class TransferServiceTest extends TestCase
 
     public function testTransferThrowsWhenToWalletNotFound(): void
     {
-        $fromWallet = Wallet::create(1, Currency::PLN);
-
         $this->walletRepository
             ->method('findById')
             ->willReturnMap([
-                [1, $fromWallet],
+                [1, WalletFixture::create(1, 1, Currency::PLN, '100.00')],
                 [99, null],
             ]);
-
         $this->transactionRepository->expects(self::never())->method('save');
 
         $this->expectException(WalletNotFoundException::class);
@@ -263,14 +323,11 @@ class TransferServiceTest extends TestCase
 
     public function testTransferThrowsWhenFromWalletBelongsToOtherUser(): void
     {
-        $fromWallet = Wallet::create(2, Currency::PLN);
-
         $this->walletRepository
             ->expects($this->once())
             ->method('findById')
             ->with(1)
-            ->willReturn($fromWallet);
-
+            ->willReturn(WalletFixture::create(1, 2, Currency::PLN, '100.00'));
         $this->transactionRepository->expects(self::never())->method('save');
 
         $this->expectException(WalletNotFoundException::class);
@@ -281,16 +338,7 @@ class TransferServiceTest extends TestCase
 
     public function testTransferThrowsWhenToWalletBelongsToOtherUser(): void
     {
-        $fromWallet = Wallet::create(1, Currency::PLN);
-        $toWallet = Wallet::create(2, Currency::EUR);
-
-        $this->walletRepository
-            ->method('findById')
-            ->willReturnMap([
-                [1, $fromWallet],
-                [2, $toWallet],
-            ]);
-
+        $this->givenWallets(WalletFixture::create(1, 1, Currency::PLN, '100.00'), WalletFixture::create(2, 2, Currency::EUR));
         $this->transactionRepository->expects(self::never())->method('save');
 
         $this->expectException(WalletNotFoundException::class);
@@ -299,13 +347,30 @@ class TransferServiceTest extends TestCase
         $this->transferService->transfer(1, 1, 2, '100.00');
     }
 
+    private function givenWallets(Wallet $fromWallet, Wallet $toWallet): void
+    {
+        $this->walletRepository
+            ->method('findById')
+            ->willReturnMap([
+                [(int) $fromWallet->getId(), $fromWallet],
+                [(int) $toWallet->getId(), $toWallet],
+            ]);
+    }
+
     private function makeServiceWithRealRates(): TransferService
+    {
+        return $this->makeService(new ExchangeRateService(), new SpreadService());
+    }
+
+    private function makeService(ExchangeRateService $exchangeRateService, SpreadService $spreadService): TransferService
     {
         return new TransferService(
             $this->walletRepository,
             $this->transactionRepository,
-            new ExchangeRateService(),
-            new SpreadService(),
+            $exchangeRateService,
+            $spreadService,
+            TransactionLimitsFactory::default(),
+            $this->transactionManager,
         );
     }
 }

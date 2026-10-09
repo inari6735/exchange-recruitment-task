@@ -9,7 +9,9 @@ use App\Dto\WalletResponse;
 use App\Entity\User;
 use App\Enum\Currency;
 use App\Exception\DepositLimitExceededException;
+use App\Exception\InsufficientFundsException;
 use App\Exception\InvalidMoneyAmountException;
+use App\Exception\SameWalletTransferException;
 use App\Exception\WalletAlreadyExistsException;
 use App\Exception\WalletBlockedException;
 use App\Exception\WalletNotFoundException;
@@ -104,6 +106,10 @@ final class WalletController extends AbstractController
             return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_NOT_FOUND);
         } catch (InvalidMoneyAmountException $e) {
             return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+        } catch (SameWalletTransferException $e) {
+            return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+        } catch (WalletBlockedException|InsufficientFundsException $e) {
+            return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         return new JsonResponse(new TransactionResponse($transaction), Response::HTTP_CREATED);

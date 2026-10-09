@@ -11,7 +11,9 @@ use App\Entity\Wallet;
 use App\Enum\Currency;
 use App\Enum\TransactionStatus;
 use App\Exception\DepositLimitExceededException;
+use App\Exception\InsufficientFundsException;
 use App\Exception\InvalidMoneyAmountException;
+use App\Exception\SameWalletTransferException;
 use App\Exception\WalletAlreadyExistsException;
 use App\Exception\WalletBlockedException;
 use App\Exception\WalletNotFoundException;
@@ -575,6 +577,36 @@ class WalletControllerTest extends TestCase
         $response = $this->controller->deposit(5, $request, $user);
 
         self::assertSame(200, $response->getStatusCode());
+    }
+
+    /**
+     * @throws Throwable
+     */
+    #[DataProvider('transferErrorProvider')]
+    public function testTransferMapsDomainErrors(Throwable $exception, int $expectedStatus, string $expectedMessage): void
+    {
+        $user = new User(1, 'test@example.com', ['ROLE_USER'], new DateTimeImmutable());
+
+        $this->transferService->method('transfer')->willThrowException($exception);
+
+        $request = new Request(content: json_encode([
+            'fromWalletId' => 1,
+            'toWalletId' => 2,
+            'amount' => '10.00',
+        ], JSON_THROW_ON_ERROR));
+        $response = $this->controller->transfer($request, $user);
+
+        self::assertSame($expectedStatus, $response->getStatusCode());
+
+        $data = json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame($expectedMessage, $data['error']);
+    }
+
+    public static function transferErrorProvider(): Generator
+    {
+        yield 'same wallet' => [new SameWalletTransferException(), 400, 'Cannot transfer to the same wallet.'];
+        yield 'insufficient funds' => [new InsufficientFundsException(1), 422, 'Insufficient funds in wallet 1.'];
+        yield 'blocked wallet' => [new WalletBlockedException(2), 422, 'Wallet 2 is blocked.'];
     }
 
     private function makeTransaction(): Transaction
