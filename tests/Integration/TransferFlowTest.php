@@ -14,6 +14,7 @@ use App\Repository\TransactionRepository;
 use App\Repository\WalletRepository;
 use App\Service\TransactionProcessorService;
 use App\Service\TransferService;
+use App\ValueObject\ExchangeRate;
 use App\ValueObject\Money;
 
 class TransferFlowTest extends DatabaseTestCase
@@ -92,6 +93,33 @@ class TransferFlowTest extends DatabaseTestCase
 
         $this->assertWallet($pln, '50.00', '0.00');
         self::assertSame([], $this->service(TransactionRepository::class)->findByWalletId($pln));
+    }
+
+    public function testLegacySameWalletTransactionCompletesWithoutCreatingMoney(): void
+    {
+        $user = $this->createUser();
+        $walletId = (int) $this->createWallet($user, Currency::PLN, '100.00')->getId();
+        $wallets = $this->service(WalletRepository::class);
+        $wallet = $wallets->findById($walletId);
+        self::assertNotNull($wallet);
+        $wallet->reserve(Money::of('40.00', Currency::PLN));
+        $wallets->save($wallet);
+
+        $transaction = Transaction::create(
+            fromWalletId: $walletId,
+            toWalletId: $walletId,
+            fromAmount: Money::of('40.00', Currency::PLN),
+            toAmount: Money::of('40.00', Currency::PLN),
+            spread: Money::zero(Currency::PLN),
+            exchangeRate: ExchangeRate::of(Currency::PLN, Currency::PLN, '1'),
+            requiresAntiFraudCheck: false,
+        );
+        $this->service(TransactionRepository::class)->save($transaction);
+
+        $this->service(TransactionProcessorService::class)->complete($this->reload((int) $transaction->getId()));
+
+        $this->assertWallet($walletId, '100.00', '0.00');
+        self::assertSame(TransactionStatus::COMPLETED, $this->reload((int) $transaction->getId())->getStatus());
     }
 
     private function reload(int $transactionId): Transaction

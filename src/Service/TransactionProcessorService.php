@@ -37,7 +37,10 @@ final readonly class TransactionProcessorService
             $this->walletRepository->lockForUpdate($transaction->getFromWalletId(), $transaction->getToWalletId());
 
             $fromWallet = $this->walletRepository->findById($transaction->getFromWalletId());
-            $toWallet = $this->walletRepository->findById($transaction->getToWalletId());
+            // A same-wallet transaction (legacy) must settle and credit one object, or the second save overwrites the first.
+            $toWallet = $transaction->getFromWalletId() === $transaction->getToWalletId()
+                ? $fromWallet
+                : $this->walletRepository->findById($transaction->getToWalletId());
 
             if (null === $fromWallet || null === $toWallet || $fromWallet->isBlocked() || $toWallet->isBlocked()) {
                 $this->rejectLocked($transaction, $fromWallet);
@@ -59,7 +62,9 @@ final readonly class TransactionProcessorService
             $toWallet->setLastActivityAt($now);
 
             $this->walletRepository->save($fromWallet);
-            $this->walletRepository->save($toWallet);
+            if ($toWallet !== $fromWallet) {
+                $this->walletRepository->save($toWallet);
+            }
 
             $spread = $transaction->getSpread();
             if ($spread->isGreaterThan(Money::zero($spread->getCurrency()))) {

@@ -77,6 +77,38 @@ class TransactionProcessorServiceTest extends TestCase
         self::assertSame(1, $this->transactionManager->calls);
     }
 
+    public function testCompleteOfSameWalletTransactionSettlesOnce(): void
+    {
+        $this->walletRepository
+            ->expects(self::once())
+            ->method('findById')
+            ->with(1)
+            ->willReturnCallback(static fn (): Wallet => WalletFixture::create(1, 1, Currency::PLN, '100.00', '40.00'));
+        $saved = [];
+        $this->walletRepository
+            ->method('save')
+            ->willReturnCallback(static function (Wallet $wallet) use (&$saved): void {
+                $saved[] = $wallet;
+            });
+        $this->companyWalletRepository->expects(self::never())->method('addToBalance');
+        $transaction = Transaction::create(
+            fromWalletId: 1,
+            toWalletId: 1,
+            fromAmount: Money::of('40.00', Currency::PLN),
+            toAmount: Money::of('40.00', Currency::PLN),
+            spread: Money::zero(Currency::PLN),
+            exchangeRate: ExchangeRate::of(Currency::PLN, Currency::PLN, '1'),
+            requiresAntiFraudCheck: false,
+        );
+
+        $this->transactionProcessorService->complete($transaction);
+
+        self::assertCount(1, $saved);
+        self::assertSame('100.00', $saved[0]->getBalance()->toString());
+        self::assertSame('0.00', $saved[0]->getReserved()->toString());
+        self::assertSame(TransactionStatus::COMPLETED, $transaction->getStatus());
+    }
+
     public function testCompleteSetsAntiFraudCheckedAtWhenRequired(): void
     {
         $this->givenWallets(WalletFixture::create(1, 1, Currency::PLN, '500.00', '100.00'), WalletFixture::create(2, 1, Currency::EUR));

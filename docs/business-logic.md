@@ -51,7 +51,7 @@ or rejects it.
 transfer ──► PENDING ──────► complete ──► COMPLETED
         └──► FRAUD_REVIEW ─┬─► complete ──► COMPLETED
                            └─► reject ────► REJECTED
-             (PENDING can be rejected too when a wallet is missing or blocked)
+             (completing a transfer — pending or approved after review — rejects it instead when a wallet is missing or blocked)
 ```
 
 | Operation  | Source `balance` | Source `reserved` | Target `balance` | Company wallet (target currency) |
