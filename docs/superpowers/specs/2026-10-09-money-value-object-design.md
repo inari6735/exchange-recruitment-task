@@ -101,12 +101,30 @@ Stan: `Currency $from`, `Currency $to`, `Number $rate` (skala 6).
 
 ### Kontroler i DTO
 
+- Kwota w body może być stringiem (`"100.50"`) lub liczbą JSON (`100.5`, `100`) — zachowanie kompatybilności.
+  Liczba jest rzutowana na string (`(string) 100.5` → `"100.5"`) i dalej przechodzi tę samą walidację;
+  liczby, które PHP zapisuje w notacji wykładniczej (np. `1.0E+25`), odpadną na formacie (`400`).
+  Inne typy (bool, tablica, null) → `400`.
 - Walidacja kwot: `Money::isValidFormat()` + porównania na `Number` (dodatnia, ≤ `MAX_AMOUNT`) zamiast
   `is_numeric` / `(float)`.
 - `InvalidMoneyAmountException` → `400` z komunikatem, np. `Amount has too many decimal places for PLN.`
 - `WalletResponse.balance`, `TransactionResponse.fromAmount|toAmount|spread` → stringi z `Money::toString()`;
   `exchangeRate` → `ExchangeRate::toString()`.
 - `ShowCompanyWalletCommand`: `Money::toString()` zamiast `number_format`.
+
+### Zmiany widoczne w API
+
+Endpointy, metody, pola i autoryzacja bez zmian. Różnice:
+
+| Gdzie                                       | Dziś                          | Po zmianie                                   |
+|---------------------------------------------|-------------------------------|----------------------------------------------|
+| Request: `amount` z precyzją > skala waluty | akceptowane                   | `400`                                        |
+| Request: `amount` jak `"1e3"`, `" 100"`     | akceptowane (`is_numeric`)    | `400`                                        |
+| Request: `amount` jako liczba JSON          | akceptowane                   | akceptowane (bez zmian)                      |
+| Response: `balance`                         | liczba (`1250.5`)             | string (`"1250.50"`)                         |
+| Response: `toAmount`                        | string, 4 miejsca             | string, skala waluty (`"371.23"`, JPY `"16194"`) |
+| Response: `fromAmount`                      | string, jak przysłany         | string, skala waluty (`"100.00"`)            |
+| Response: `spread`, `exchangeRate`          | string, 2 / 6 miejsc          | bez zmian (spread wg skali waluty)           |
 
 ### Migracja (nowa wersja)
 
@@ -143,6 +161,8 @@ Nowe:
 - Przypadek referencyjny: transfer PLN → HUF przeliczony ręcznie (kurs, spread, kwota netto).
 
 Do aktualizacji: testy encji, DTO, serwisów, kontrolera — typy `Money`, asercje na stringach.
+Kontroler: dodatkowo przypadki `amount` jako liczba JSON (int i float — akceptowane), jako bool/null/tablica
+(`400`) oraz zbyt wysoka precyzja dla waluty portfela (`400`).
 
 `TransferServiceTest`: niezacommitowany, rozgrzebany wariant `KernelTestCase` (`testTransferElo` bez asercji,
 pozostałe testy odwołują się do usuniętych mocków) zostaje zastąpiony wersją jednostkową na mockach (jak w HEAD),
