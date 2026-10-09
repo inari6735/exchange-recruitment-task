@@ -1,4 +1,23 @@
 parameters:
+  # Per-currency limits (amounts in the given currency).
+  # A transfer whose source amount is greater than the threshold goes to manual fraud review.
+  app.limits.anti_fraud_threshold:
+    PLN: '15000'
+    EUR: '3500'
+    USD: '4000'
+    GBP: '3000'
+    CHF: '3200'
+    JPY: '650000'
+    HUF: '1250000'
+  # Maximum amount of a single deposit.
+  app.limits.deposit:
+    PLN: '10000'
+    EUR: '2500'
+    USD: '2500'
+    GBP: '2000'
+    CHF: '2000'
+    JPY: '450000'
+    HUF: '850000'
 
 services:
   _defaults:
@@ -8,3 +27,7 @@ services:
   App\:
     resource: '../src/'
 
+  App\Service\TransactionLimits:
+    arguments:
+      $antiFraudThresholds: '%app.limits.anti_fraud_threshold%'
+      $depositLimits: '%app.limits.deposit%'
