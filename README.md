@@ -93,6 +93,11 @@ All endpoints require Bearer token authentication. Obtain a token with `app:crea
 | `POST` | `/api/wallets/{id}/deposit` | Deposit funds into a wallet. Body: `{ "amount": "500.00" }`. Maximum single deposit: `10000`. Returns `422` if the wallet is blocked.                                                  |
 | `POST` | `/api/wallets/transfer`     | Transfer funds between two wallets of the authenticated user (currency exchange supported). Body: `{ "fromWalletId": 1, "toWalletId": 2, "amount": "100.00" }`.                        |
 
+**Amounts.** Request `amount` may be a decimal string (`"100.50"`) or a JSON number (`100.5`). It must be positive and
+must not have more decimal places than the wallet currency allows: `JPY` — 0, all other currencies — 2. Otherwise the
+API returns `400`. All amounts in responses (`balance`, `fromAmount`, `toAmount`, `spread`) are strings formatted to
+the currency's decimal places (e.g. `"1250.50"`, `"4333"` for JPY); `exchangeRate` is a string with 6 decimal places.
+
 A ready-to-use Postman collection is available at [`exchange-api.postman_collection.json`](./exchange-api.postman_collection.json).
 Set the `authToken` variable to the token returned by `app:create-user`.
 
