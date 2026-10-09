@@ -70,8 +70,10 @@ Stan: `Currency $from`, `Currency $to`, `Number $rate` (skala 6).
 - `Wallet::$balance`, `CompanyWallet::$balance`: `float` → `Money`. `setBalance(Money)` rzuca
   `CurrencyMismatchException`, gdy waluta różni się od waluty portfela. `create()` używa `Money::zero()`.
 - `Transaction`: `fromAmount`, `toAmount`, `spread` → `Money`; `exchangeRate` → `ExchangeRate`.
-  Pola `fromCurrency`/`toCurrency` zostają w konstruktorze (kolumny w bazie), ale `create()` wyprowadza je
-  z `Money`, a konstruktor weryfikuje spójność.
+  Pola `fromCurrency`/`toCurrency` znikają z encji — `getFromCurrency()`/`getToCurrency()` zwracają walutę
+  z `fromAmount`/`toAmount` (kolumny w bazie zostają, repozytorium je zapisuje i z nich buduje `Money`).
+  Konstruktor rzuca `CurrencyMismatchException`, gdy kurs nie pasuje do walut kwot albo spread jest w innej
+  walucie niż `toAmount`.
 
 ### Serwisy
 
@@ -143,12 +145,12 @@ Uwaga: krok 1 przepisuje historyczne transakcje — akceptowalne w środowisku d
 
 - `Dockerfile`: `bcmath` w `docker-php-ext-install`.
 - `composer.json`: `"ext-bcmath": "*"` w `require`.
-- Lokalnie: rozszerzenie `bcmath` musi być włączone (instaluje użytkownik).
+- Lokalnie: rozszerzenie `bcmath` jest już włączone (PHP 8.5.11).
 
 ### Dokumentacja
 
 - README: kwoty w odpowiedziach API są stringami; precyzja zależna od waluty.
-- `exchange-api.postman_collection.json`: przykłady kwot jako stringi zgodne z precyzją.
+- `exchange-api.postman_collection.json`: bez zmian — body już mają kwoty jako stringi, brak przykładowych odpowiedzi.
 
 ## Testy (TDD)
 
@@ -173,6 +175,8 @@ podwójnego księgowania.
 
 - Brak `float` dla kwot i kursów w `src/` (poza ewentualnymi stałymi płynności w `SpreadService`).
 - Wszystkie kolumny kwot to `DECIMAL`, wartości zawsze w skali waluty.
-- `composer tests` przechodzi.
+- `composer tests` przechodzi, poza dwoma testami, które failują już na HEAD i opisują poprawkę podwójnego
+  księgowania (poza zakresem): `TransactionProcessorServiceTest::testRejectSetsRejectedStatus`,
+  `TransferServiceTest::testTransferSuccessfully`. Oba zostają (przepisane na `Money`) i failują z tym samym powodem.
 - Zachowanie biznesowe bez zmian, poza dokładnością, zaokrągleniami, odrzucaniem zbyt precyzyjnych kwot
   i formatem kwot w JSON.
