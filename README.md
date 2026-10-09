@@ -80,6 +80,13 @@ docker exec -it php-fpm <command>
 docker exec -it php-fpm composer tests
 ```
 
+Integration tests use the `app_test` database (created by `docker/mariadb/init/01-test-database.sql` on the first
+start of the MariaDB volume). Apply migrations to it once before running tests:
+
+```bash
+php bin/console doctrine:migrations:migrate -n --env=test
+```
+
 ---
 
 ## API Endpoints

@@ -7,6 +7,7 @@ namespace App\Repository;
 use App\Entity\Transaction;
 use App\Enum\Currency;
 use App\Enum\TransactionStatus;
+use App\Exception\TransactionAlreadyProcessedException;
 use App\ValueObject\ExchangeRate;
 use App\ValueObject\Money;
 use DateTimeImmutable;
@@ -171,7 +172,10 @@ readonly class TransactionRepository implements TransactionRepositoryInterface
     }
 
     /**
+     * Only an in-flight transaction (pending or fraud review) can change its status, so a transaction is settled once.
+     *
      * @throws Exception
+     * @throws TransactionAlreadyProcessedException
      */
     private function update(Transaction $transaction): void
     {
@@ -181,9 +185,10 @@ readonly class TransactionRepository implements TransactionRepositoryInterface
             ->update(self::TABLE_NAME)
             ->set('status', ':status')
             ->set('anti_fraud_checked_at', ':anti_fraud_checked_at')
-            ->where('id = :id');
+            ->where('id = :id')
+            ->andWhere('status IN (:pending, :fraud_review)');
 
-        $this->connection->executeQuery(
+        $affectedRows = $this->connection->executeStatement(
             $qb->getSQL(),
             [
                 'status' => $transaction->getStatus()->value,
@@ -191,7 +196,13 @@ readonly class TransactionRepository implements TransactionRepositoryInterface
                     ?->setTimezone(timezone: new DateTimeZone('UTC'))
                     ->format('Y-m-d H:i:s'),
                 'id' => $transaction->getId(),
+                'pending' => TransactionStatus::PENDING->value,
+                'fraud_review' => TransactionStatus::FRAUD_REVIEW->value,
             ]
         );
+
+        if (0 === $affectedRows) {
+            throw new TransactionAlreadyProcessedException((int) $transaction->getId());
+        }
     }
 }

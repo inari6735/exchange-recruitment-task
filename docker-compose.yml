@@ -41,5 +41,7 @@ services:
       MARIADB_PASSWORD: app
     ports:
       - "3307:3306"
+    volumes:
+      - ./docker/mariadb/init:/docker-entrypoint-initdb.d:ro
     # networks:
     #   - app-network

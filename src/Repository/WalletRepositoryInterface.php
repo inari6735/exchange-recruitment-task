@@ -17,4 +17,10 @@ interface WalletRepositoryInterface
     public function findByUserIdAndCurrency(int $userId, Currency $currency): ?Wallet;
 
     public function save(Wallet $wallet): void;
+
+    /**
+     * Locks the wallets' rows until the current database transaction ends.
+     * Ids are deduplicated and locked in ascending order, so concurrent callers cannot deadlock each other.
+     */
+    public function lockForUpdate(int ...$ids): void;
 }

@@ -9,6 +9,7 @@ use App\Enum\Currency;
 use App\ValueObject\Money;
 use DateTimeImmutable;
 use DateTimeZone;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception;
 use ReflectionClass;
@@ -96,6 +97,25 @@ readonly class WalletRepository implements WalletRepositoryInterface
         } else {
             $this->update($wallet);
         }
+    }
+
+    /**
+     * @throws Exception
+     */
+    public function lockForUpdate(int ...$ids): void
+    {
+        if ([] === $ids) {
+            return;
+        }
+
+        $ids = array_values(array_unique($ids));
+        sort($ids);
+
+        $this->connection->executeQuery(
+            sprintf('SELECT id FROM %s WHERE id IN (?) ORDER BY id FOR UPDATE', self::TABLE_NAME),
+            [$ids],
+            [ArrayParameterType::INTEGER],
+        );
     }
 
     private function buildEntity(array $row): Wallet
