@@ -19,6 +19,8 @@ USD/EUR pair.
 
 Earnings across all wallets are tracked via the `app:company-wallet` console command.
 
+How transfers, reservations, processing and limits work is described in [docs/business-logic.md](docs/business-logic.md).
+
 ---
 
 ## Prerequisites
@@ -95,10 +97,10 @@ All endpoints require Bearer token authentication. Obtain a token with `app:crea
 
 | Method | Path                        | Description                                                                                                                                                                            |
 |--------|-----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `GET`  | `/api/wallets`              | List all wallets belonging to the authenticated user.                                                                                                                                  |
+| `GET`  | `/api/wallets`              | List all wallets belonging to the authenticated user. Each wallet shows balance, reserved and available amounts.                                                                                                                                  |
 | `POST` | `/api/wallets`              | Create a new wallet. Body: `{ "currency": "PLN" }`. Supported currencies: `PLN`, `EUR`, `USD`, `GBP`, `JPY`, `CHF`, `HUF`. Returns `409` if a wallet for that currency already exists. |
-| `POST` | `/api/wallets/{id}/deposit` | Deposit funds into a wallet. Body: `{ "amount": "500.00" }`. Maximum single deposit: `10000`. Returns `422` if the wallet is blocked.                                                  |
-| `POST` | `/api/wallets/transfer`     | Transfer funds between two wallets of the authenticated user (currency exchange supported). Body: `{ "fromWalletId": 1, "toWalletId": 2, "amount": "100.00" }`.                        |
+| `POST` | `/api/wallets/{id}/deposit` | Deposit funds into a wallet. Body: `{ "amount": "500.00" }`. The maximum single deposit depends on the currency (see docs/business-logic.md). Returns 422 if the wallet is blocked.                                                  |
+| `POST` | `/api/wallets/transfer`     | Transfer funds between two wallets of the authenticated user (currency exchange supported). Body: `{ "fromWalletId": 1, "toWalletId": 2, "amount": "100.00" }`. Reserves the amount until the transfer is processed. Returns 422 when funds are insufficient or a wallet is blocked.                        |
 
 **Amounts.** Request `amount` may be a decimal string (`"100.50"`) or a JSON number (`100.5`). It must be positive and
 must not have more decimal places than the wallet currency allows: `JPY` — 0, all other currencies — 2. Otherwise the
@@ -115,7 +117,7 @@ Set the `authToken` variable to the token returned by `app:create-user`.
 | Command                    | Description                                                                                       |
 |----------------------------|---------------------------------------------------------------------------------------------------|
 | `app:create-user`          | Creates a user and returns an API token. Use this token when testing endpoints (e.g. in Postman). |
-| `app:process-transactions` | Processes pending transactions — either approves or rejects them.                                 |
+| `app:process-transactions` | Processes pending transfers and asks for a decision on those in fraud review; completes or rejects them.                                 |
 | `app:company-wallet`       | Displays the company wallets and shows how much the company has earned.                           |
 
 **How to run a console command:**

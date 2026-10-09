@@ -177,12 +177,7 @@ class Wallet
     private function assertReserved(Money $amount): void
     {
         if ($amount->isGreaterThan($this->reserved)) {
-            throw new LogicException(sprintf(
-                'Cannot use %s %s: only %s reserved.',
-                $amount->toString(),
-                $this->currency->value,
-                $this->reserved->toString(),
-            ));
+            throw new LogicException(sprintf('Cannot use %s %s: only %s reserved.', $amount->toString(), $this->currency->value, $this->reserved->toString()));
         }
     }
 }
