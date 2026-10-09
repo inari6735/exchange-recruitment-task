@@ -52,6 +52,42 @@ class TransactionRepositoryTest extends DatabaseTestCase
         self::assertSame(TransactionStatus::REJECTED, $repository->findById($id)?->getStatus());
     }
 
+    public function testHasInFlightTransfersForSourceAndTarget(): void
+    {
+        $repository = $this->service(TransactionRepository::class);
+        $transaction = $repository->findById($this->createPendingTransaction());
+
+        self::assertTrue($repository->hasInFlightTransfers((int) $transaction?->getFromWalletId()));
+        self::assertTrue($repository->hasInFlightTransfers((int) $transaction?->getToWalletId()));
+    }
+
+    public function testFraudReviewCountsAsInFlight(): void
+    {
+        $repository = $this->service(TransactionRepository::class);
+        $transaction = $repository->findById($this->createPendingTransaction(requiresAntiFraudCheck: true));
+
+        self::assertTrue($repository->hasInFlightTransfers((int) $transaction?->getToWalletId()));
+    }
+
+    public function testSettledTransfersAreNotInFlight(): void
+    {
+        $repository = $this->service(TransactionRepository::class);
+        $transaction = $repository->findById($this->createPendingTransaction());
+        $transaction?->setStatus(TransactionStatus::COMPLETED);
+        $repository->save($transaction);
+
+        self::assertFalse($repository->hasInFlightTransfers((int) $transaction?->getFromWalletId()));
+        self::assertFalse($repository->hasInFlightTransfers((int) $transaction?->getToWalletId()));
+    }
+
+    public function testUnrelatedWalletHasNoInFlightTransfers(): void
+    {
+        $this->createPendingTransaction();
+        $other = $this->createWallet($this->createUser(), Currency::GBP);
+
+        self::assertFalse($this->service(TransactionRepository::class)->hasInFlightTransfers((int) $other->getId()));
+    }
+
     private function createPendingTransaction(bool $requiresAntiFraudCheck = false): int
     {
         $user = $this->createUser();

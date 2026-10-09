@@ -55,6 +55,11 @@ class TransferAtomicityTest extends KernelTestCase
                 return [];
             }
 
+            public function hasInFlightTransfers(int $walletId): bool
+            {
+                return false;
+            }
+
             public function save(Transaction $transaction): void
             {
                 throw new RuntimeException('transaction insert failed');

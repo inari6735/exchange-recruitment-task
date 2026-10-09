@@ -11,9 +11,16 @@ interface WalletRepositoryInterface
 {
     public function findById(int $id): ?Wallet;
 
-    /** @return Wallet[] */
+    /**
+     * Open wallets only.
+     *
+     * @return Wallet[]
+     */
     public function findByUserId(int $userId): array;
 
+    /**
+     * The user's open wallet in the currency, if any.
+     */
     public function findByUserIdAndCurrency(int $userId, Currency $currency): ?Wallet;
 
     public function save(Wallet $wallet): void;

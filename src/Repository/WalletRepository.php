@@ -55,7 +55,8 @@ readonly class WalletRepository implements WalletRepositoryInterface
         $qb
             ->select('*')
             ->from(self::TABLE_NAME)
-            ->where('user_id = :user_id');
+            ->where('user_id = :user_id')
+            ->andWhere('closed_at IS NULL');
 
         $rows = $this->connection->fetchAllAssociative($qb->getSQL(), ['user_id' => $userId]);
 
@@ -73,7 +74,8 @@ readonly class WalletRepository implements WalletRepositoryInterface
             ->select('*')
             ->from(self::TABLE_NAME)
             ->where('user_id = :user_id')
-            ->andWhere('currency = :currency');
+            ->andWhere('currency = :currency')
+            ->andWhere('closed_at IS NULL');
 
         $row = $this->connection->fetchAssociative($qb->getSQL(), [
             'user_id' => $userId,
@@ -131,6 +133,7 @@ readonly class WalletRepository implements WalletRepositoryInterface
             isBlocked: (bool) $row['is_blocked'],
             lastActivityAt: null !== $row['last_activity_at'] ? new DateTimeImmutable($row['last_activity_at']) : null,
             createdAt: new DateTimeImmutable($row['created_at']),
+            closedAt: null !== $row['closed_at'] ? new DateTimeImmutable($row['closed_at']) : null,
         );
     }
 
@@ -151,6 +154,7 @@ readonly class WalletRepository implements WalletRepositoryInterface
                 'is_blocked' => ':is_blocked',
                 'last_activity_at' => ':last_activity_at',
                 'created_at' => ':created_at',
+                'closed_at' => ':closed_at',
             ]);
 
         $this->connection->executeQuery(
@@ -165,6 +169,7 @@ readonly class WalletRepository implements WalletRepositoryInterface
                 'created_at' => $wallet->getCreatedAt()
                     ->setTimezone(timezone: new DateTimeZone('UTC'))
                     ->format('Y-m-d H:i:s'),
+                'closed_at' => $wallet->getClosedAt()?->setTimezone(timezone: new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
             ]
         );
 
@@ -188,6 +193,7 @@ readonly class WalletRepository implements WalletRepositoryInterface
             ->set('reserved', ':reserved')
             ->set('is_blocked', ':is_blocked')
             ->set('last_activity_at', ':last_activity_at')
+            ->set('closed_at', ':closed_at')
             ->where('id = :id');
 
         $this->connection->executeQuery(
@@ -197,6 +203,7 @@ readonly class WalletRepository implements WalletRepositoryInterface
                 'reserved' => $wallet->getReserved()->toString(),
                 'is_blocked' => (int) $wallet->isBlocked(),
                 'last_activity_at' => $wallet->getLastActivityAt()?->setTimezone(timezone: new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
+                'closed_at' => $wallet->getClosedAt()?->setTimezone(timezone: new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
                 'id' => $wallet->getId(),
             ]
         );

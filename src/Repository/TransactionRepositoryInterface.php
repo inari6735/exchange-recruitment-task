@@ -17,5 +17,10 @@ interface TransactionRepositoryInterface
     /** @return Transaction[] */
     public function findByStatus(TransactionStatus $status): array;
 
+    /**
+     * Whether a pending or fraud-review transfer has the wallet as its source or target.
+     */
+    public function hasInFlightTransfers(int $walletId): bool;
+
     public function save(Transaction $transaction): void;
 }
