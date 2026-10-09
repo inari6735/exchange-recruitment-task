@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Entity;
 
 use App\Enum\Currency;
+use App\Exception\CurrencyMismatchException;
+use App\ValueObject\Money;
 use DateTimeImmutable;
 
 class CompanyWallet
@@ -12,10 +14,11 @@ class CompanyWallet
     public function __construct(
         private ?int $id,
         private readonly Currency $currency,
-        private float $balance,
+        private Money $balance,
         private readonly DateTimeImmutable $createdAt,
         private DateTimeImmutable $updatedAt,
     ) {
+        $this->assertBalanceCurrency($balance);
     }
 
     public static function create(Currency $currency): self
@@ -25,7 +28,7 @@ class CompanyWallet
         return new self(
             id: null,
             currency: $currency,
-            balance: 0.0,
+            balance: Money::zero($currency),
             createdAt: $now,
             updatedAt: $now,
         );
@@ -41,7 +44,7 @@ class CompanyWallet
         return $this->currency;
     }
 
-    public function getBalance(): float
+    public function getBalance(): Money
     {
         return $this->balance;
     }
@@ -56,8 +59,16 @@ class CompanyWallet
         return $this->updatedAt;
     }
 
-    public function setBalance(float $balance): void
+    public function setBalance(Money $balance): void
     {
+        $this->assertBalanceCurrency($balance);
         $this->balance = $balance;
+    }
+
+    private function assertBalanceCurrency(Money $balance): void
+    {
+        if ($balance->getCurrency() !== $this->currency) {
+            throw new CurrencyMismatchException($this->currency, $balance->getCurrency());
+        }
     }
 }

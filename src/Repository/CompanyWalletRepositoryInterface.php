@@ -6,6 +6,7 @@ namespace App\Repository;
 
 use App\Entity\CompanyWallet;
 use App\Enum\Currency;
+use App\ValueObject\Money;
 
 interface CompanyWalletRepositoryInterface
 {
@@ -14,5 +15,5 @@ interface CompanyWalletRepositoryInterface
     /** @return CompanyWallet[] */
     public function findAll(): array;
 
-    public function addToBalance(Currency $currency, string $amount): void;
+    public function addToBalance(Money $amount): void;
 }

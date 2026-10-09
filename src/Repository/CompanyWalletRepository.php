@@ -6,6 +6,7 @@ namespace App\Repository;
 
 use App\Entity\CompanyWallet;
 use App\Enum\Currency;
+use App\ValueObject\Money;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\DBAL\Connection;
@@ -62,8 +63,9 @@ readonly class CompanyWalletRepository implements CompanyWalletRepositoryInterfa
     /**
      * @throws Exception
      */
-    public function addToBalance(Currency $currency, string $amount): void
+    public function addToBalance(Money $amount): void
     {
+        $currency = $amount->getCurrency();
         $now = new DateTimeImmutable()->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
 
         $existing = $this->findByCurrency($currency);
@@ -81,7 +83,7 @@ readonly class CompanyWalletRepository implements CompanyWalletRepositoryInterfa
 
             $this->connection->executeStatement($qb->getSQL(), [
                 'currency' => $currency->value,
-                'balance' => $amount,
+                'balance' => $amount->toString(),
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
@@ -93,7 +95,7 @@ readonly class CompanyWalletRepository implements CompanyWalletRepositoryInterfa
                 ->where('currency = :currency');
 
             $this->connection->executeStatement($qb->getSQL(), [
-                'amount' => $amount,
+                'amount' => $amount->toString(),
                 'updated_at' => $now,
                 'currency' => $currency->value,
             ]);
@@ -102,10 +104,12 @@ readonly class CompanyWalletRepository implements CompanyWalletRepositoryInterfa
 
     private function buildEntity(array $row): CompanyWallet
     {
+        $currency = Currency::from($row['currency']);
+
         return new CompanyWallet(
             id: (int) $row['id'],
-            currency: Currency::from($row['currency']),
-            balance: (float) $row['balance'],
+            currency: $currency,
+            balance: Money::of((string) $row['balance'], $currency),
             createdAt: new DateTimeImmutable($row['created_at']),
             updatedAt: new DateTimeImmutable($row['updated_at']),
         );

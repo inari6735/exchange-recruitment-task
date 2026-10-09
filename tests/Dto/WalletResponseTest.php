@@ -7,6 +7,7 @@ namespace App\Tests\Dto;
 use App\Dto\WalletResponse;
 use App\Entity\Wallet;
 use App\Enum\Currency;
+use App\ValueObject\Money;
 use DateTimeImmutable;
 use DateTimeInterface;
 use PHPUnit\Framework\TestCase;
@@ -21,7 +22,7 @@ class WalletResponseTest extends TestCase
 
         self::assertNull($data['id']);
         self::assertSame('PLN', $data['currency']);
-        self::assertSame(0.0, $data['balance']);
+        self::assertSame('0.00', $data['balance']);
         self::assertFalse($data['isBlocked']);
         self::assertNull($data['lastActivityAt']);
     }
@@ -45,5 +46,15 @@ class WalletResponseTest extends TestCase
         $data = new WalletResponse($wallet)->jsonSerialize();
 
         self::assertTrue($data['isBlocked']);
+    }
+
+    public function testJsonSerializeBalanceAsStringInCurrencyScale(): void
+    {
+        $wallet = Wallet::create(1, Currency::JPY);
+        $wallet->setBalance(Money::of('1250', Currency::JPY));
+
+        $data = new WalletResponse($wallet)->jsonSerialize();
+
+        self::assertSame('1250', $data['balance']);
     }
 }

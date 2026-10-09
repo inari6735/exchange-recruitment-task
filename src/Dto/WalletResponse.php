@@ -19,7 +19,7 @@ final readonly class WalletResponse implements JsonSerializable
         return [
             'id' => $this->wallet->getId(),
             'currency' => $this->wallet->getCurrency()->value,
-            'balance' => $this->wallet->getBalance(),
+            'balance' => $this->wallet->getBalance()->toString(),
             'isBlocked' => $this->wallet->isBlocked(),
             'lastActivityAt' => $this->wallet->getLastActivityAt()?->format(DateTimeInterface::ATOM),
         ];

@@ -6,6 +6,8 @@ namespace App\Tests\Entity;
 
 use App\Entity\CompanyWallet;
 use App\Enum\Currency;
+use App\Exception\CurrencyMismatchException;
+use App\ValueObject\Money;
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 
@@ -17,7 +19,7 @@ class CompanyWalletTest extends TestCase
 
         $this->assertNull($wallet->getId());
         $this->assertSame(Currency::EUR, $wallet->getCurrency());
-        $this->assertSame(0.0, $wallet->getBalance());
+        $this->assertSame('0.00', $wallet->getBalance()->toString());
     }
 
     public function testCreateSetsTimestamps(): void
@@ -42,18 +44,27 @@ class CompanyWalletTest extends TestCase
     public function testSetBalance(): void
     {
         $wallet = CompanyWallet::create(Currency::PLN);
-        $wallet->setBalance(250.75);
+        $wallet->setBalance(Money::of('250.75', Currency::PLN));
 
-        $this->assertSame(250.75, $wallet->getBalance());
+        $this->assertSame('250.75', $wallet->getBalance()->toString());
     }
 
     public function testSetBalanceToZero(): void
     {
         $wallet = CompanyWallet::create(Currency::PLN);
-        $wallet->setBalance(100.0);
-        $wallet->setBalance(0.0);
+        $wallet->setBalance(Money::of('100.00', Currency::PLN));
+        $wallet->setBalance(Money::zero(Currency::PLN));
 
-        $this->assertSame(0.0, $wallet->getBalance());
+        $this->assertSame('0.00', $wallet->getBalance()->toString());
+    }
+
+    public function testSetBalanceRejectsDifferentCurrency(): void
+    {
+        $wallet = CompanyWallet::create(Currency::PLN);
+
+        $this->expectException(CurrencyMismatchException::class);
+
+        $wallet->setBalance(Money::of('1.00', Currency::EUR));
     }
 
     public function testGetCurrency(): void

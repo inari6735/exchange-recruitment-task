@@ -6,6 +6,8 @@ namespace App\Tests\Entity;
 
 use App\Entity\Wallet;
 use App\Enum\Currency;
+use App\Exception\CurrencyMismatchException;
+use App\ValueObject\Money;
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 
@@ -18,7 +20,8 @@ class WalletTest extends TestCase
         $this->assertNull($wallet->getId());
         $this->assertSame(5, $wallet->getUserId());
         $this->assertSame(Currency::EUR, $wallet->getCurrency());
-        $this->assertSame(0.0, $wallet->getBalance());
+        $this->assertSame('0.00', $wallet->getBalance()->toString());
+        $this->assertSame(Currency::EUR, $wallet->getBalance()->getCurrency());
         $this->assertFalse($wallet->isBlocked());
         $this->assertNull($wallet->getLastActivityAt());
     }
@@ -26,9 +29,33 @@ class WalletTest extends TestCase
     public function testSetBalance(): void
     {
         $wallet = Wallet::create(userId: 1, currency: Currency::PLN);
-        $wallet->setBalance(150.50);
+        $wallet->setBalance(Money::of('150.50', Currency::PLN));
 
-        $this->assertSame(150.50, $wallet->getBalance());
+        $this->assertSame('150.50', $wallet->getBalance()->toString());
+    }
+
+    public function testSetBalanceRejectsDifferentCurrency(): void
+    {
+        $wallet = Wallet::create(userId: 1, currency: Currency::PLN);
+
+        $this->expectException(CurrencyMismatchException::class);
+
+        $wallet->setBalance(Money::of('1.00', Currency::EUR));
+    }
+
+    public function testConstructorRejectsBalanceInDifferentCurrency(): void
+    {
+        $this->expectException(CurrencyMismatchException::class);
+
+        new Wallet(
+            id: 1,
+            userId: 1,
+            currency: Currency::PLN,
+            balance: Money::of('1.00', Currency::EUR),
+            isBlocked: false,
+            lastActivityAt: null,
+            createdAt: new DateTimeImmutable(),
+        );
     }
 
     public function testSetIsBlocked(): void

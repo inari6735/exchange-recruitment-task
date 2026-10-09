@@ -6,6 +6,7 @@ namespace App\Repository;
 
 use App\Entity\Wallet;
 use App\Enum\Currency;
+use App\ValueObject\Money;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\DBAL\Connection;
@@ -99,11 +100,13 @@ readonly class WalletRepository implements WalletRepositoryInterface
 
     private function buildEntity(array $row): Wallet
     {
+        $currency = Currency::from($row['currency']);
+
         return new Wallet(
             id: (int) $row['id'],
             userId: (int) $row['user_id'],
-            currency: Currency::from($row['currency']),
-            balance: (float) $row['balance'],
+            currency: $currency,
+            balance: Money::of((string) $row['balance'], $currency),
             isBlocked: (bool) $row['is_blocked'],
             lastActivityAt: null !== $row['last_activity_at'] ? new DateTimeImmutable($row['last_activity_at']) : null,
             createdAt: new DateTimeImmutable($row['created_at']),
@@ -133,7 +136,7 @@ readonly class WalletRepository implements WalletRepositoryInterface
             [
                 'user_id' => $wallet->getUserId(),
                 'currency' => $wallet->getCurrency()->value,
-                'balance' => $wallet->getBalance(),
+                'balance' => $wallet->getBalance()->toString(),
                 'is_blocked' => (int) $wallet->isBlocked(),
                 'last_activity_at' => $wallet->getLastActivityAt()?->setTimezone(timezone: new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
                 'created_at' => $wallet->getCreatedAt()
@@ -166,7 +169,7 @@ readonly class WalletRepository implements WalletRepositoryInterface
         $this->connection->executeQuery(
             $qb->getSQL(),
             [
-                'balance' => $wallet->getBalance(),
+                'balance' => $wallet->getBalance()->toString(),
                 'is_blocked' => (int) $wallet->isBlocked(),
                 'last_activity_at' => $wallet->getLastActivityAt()?->setTimezone(timezone: new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
                 'id' => $wallet->getId(),

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Command;
 
+use App\Entity\CompanyWallet;
 use App\Repository\CompanyWalletRepositoryInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -35,7 +36,7 @@ class ShowCompanyWalletCommand extends Command
         }
 
         $rows = array_map(
-            static fn ($wallet) => [$wallet->getCurrency()->value, number_format($wallet->getBalance(), 4, '.', '')],
+            static fn (CompanyWallet $wallet) => [$wallet->getCurrency()->value, $wallet->getBalance()->toString()],
             $wallets,
         );
 

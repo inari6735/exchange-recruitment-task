@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Entity;
 
 use App\Enum\Currency;
+use App\Exception\CurrencyMismatchException;
+use App\ValueObject\Money;
 use DateTimeImmutable;
 
 class Wallet
@@ -13,11 +15,12 @@ class Wallet
         private ?int $id,
         private readonly int $userId,
         private readonly Currency $currency,
-        private float $balance,
+        private Money $balance,
         private bool $isBlocked,
         private ?DateTimeImmutable $lastActivityAt,
         private readonly DateTimeImmutable $createdAt,
     ) {
+        $this->assertBalanceCurrency($balance);
     }
 
     public static function create(int $userId, Currency $currency): self
@@ -26,7 +29,7 @@ class Wallet
             id: null,
             userId: $userId,
             currency: $currency,
-            balance: 0.0,
+            balance: Money::zero($currency),
             isBlocked: false,
             lastActivityAt: null,
             createdAt: new DateTimeImmutable(),
@@ -48,7 +51,7 @@ class Wallet
         return $this->currency;
     }
 
-    public function getBalance(): float
+    public function getBalance(): Money
     {
         return $this->balance;
     }
@@ -68,8 +71,9 @@ class Wallet
         return $this->createdAt;
     }
 
-    public function setBalance(float $balance): void
+    public function setBalance(Money $balance): void
     {
+        $this->assertBalanceCurrency($balance);
         $this->balance = $balance;
     }
 
@@ -81,5 +85,12 @@ class Wallet
     public function setLastActivityAt(?DateTimeImmutable $lastActivityAt): void
     {
         $this->lastActivityAt = $lastActivityAt;
+    }
+
+    private function assertBalanceCurrency(Money $balance): void
+    {
+        if ($balance->getCurrency() !== $this->currency) {
+            throw new CurrencyMismatchException($this->currency, $balance->getCurrency());
+        }
     }
 }
