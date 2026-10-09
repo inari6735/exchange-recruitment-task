@@ -53,7 +53,7 @@ błąd. Kwota przyjmowana jako string dziesiętny lub liczba JSON (jak dziś).
 |--------------------------------------------------|---------------------------------------|-----------------------------------------------------------|
 | brak / zły `Content-Type` (np. `curl -d` bez `-H`) | działa (body zawsze jako JSON)        | 415 `Unsupported content type, expected application/json.` |
 | niepoprawny JSON (`{bad`), puste body              | 500 (HTML)                            | 400 `Invalid JSON body.`                                   |
-| body będące skalarem JSON (np. `5`)               | 400 `Missing required field: …`       | 400 `Invalid JSON body.`                                   |
+| body będące skalarem JSON (np. `5`)               | 400 `Missing required field: …`       | bez zmian — 400 `Missing required field: …` (serializer daje pusty obiekt) |
 | `"currency": ["PLN"]` (nie-string)                | 500                                   | 400 `Invalid currency.`                                    |
 | `"fromWalletId": "abc"` / `0` / `-1` / `1.5` / `true` | 404 `Wallet 0 not found.` lub rzutowanie | 400 `fromWalletId must be a positive integer.` (analogicznie `toWalletId`) |
 | `/api/wallets/abc/deposit`                         | 500                                   | 404 `Not found.`                                           |
