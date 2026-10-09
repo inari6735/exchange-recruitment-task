@@ -13,4 +13,15 @@ enum Currency: string
     case JPY = 'JPY'; // Yen
     case CHF = 'CHF'; // Swiss Franc
     case HUF = 'HUF'; // Hungarian Forint
+
+    /**
+     * Number of decimal places (ISO 4217 minor units).
+     */
+    public function scale(): int
+    {
+        return match ($this) {
+            self::JPY => 0,
+            default => 2,
+        };
+    }
 }

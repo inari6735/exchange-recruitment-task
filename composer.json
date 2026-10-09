@@ -4,6 +4,7 @@
     "type": "project",
     "require": {
         "php": "^8.5",
+        "ext-bcmath": "*",
         "doctrine/dbal": "^4.4",
         "doctrine/doctrine-bundle": "^3.2",
         "doctrine/doctrine-migrations-bundle": "^4.0",
