@@ -35,7 +35,7 @@ readonly class DepositService
             $this->walletRepository->lockForUpdate($walletId);
 
             $wallet = $this->walletRepository->findById($walletId);
-            if (null === $wallet || $wallet->getUserId() !== $userId) {
+            if (null === $wallet || $wallet->getUserId() !== $userId || $wallet->isClosed()) {
                 throw new WalletNotFoundException($walletId);
             }
 

@@ -42,7 +42,9 @@ final readonly class TransactionProcessorService
                 ? $fromWallet
                 : $this->walletRepository->findById($transaction->getToWalletId());
 
-            if (null === $fromWallet || null === $toWallet || $fromWallet->isBlocked() || $toWallet->isBlocked()) {
+            if (null === $fromWallet || null === $toWallet
+                || $fromWallet->isBlocked() || $toWallet->isBlocked()
+                || $fromWallet->isClosed() || $toWallet->isClosed()) {
                 $this->rejectLocked($transaction, $fromWallet);
 
                 return;

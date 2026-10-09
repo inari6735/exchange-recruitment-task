@@ -57,12 +57,12 @@ readonly class TransferService
         $this->walletRepository->lockForUpdate($fromWalletId, $toWalletId);
 
         $fromWallet = $this->walletRepository->findById($fromWalletId);
-        if (null === $fromWallet || $fromWallet->getUserId() !== $userId) {
+        if (null === $fromWallet || $fromWallet->getUserId() !== $userId || $fromWallet->isClosed()) {
             throw new WalletNotFoundException($fromWalletId);
         }
 
         $toWallet = $this->walletRepository->findById($toWalletId);
-        if (null === $toWallet || $toWallet->getUserId() !== $userId) {
+        if (null === $toWallet || $toWallet->getUserId() !== $userId || $toWallet->isClosed()) {
             throw new WalletNotFoundException($toWalletId);
         }
 

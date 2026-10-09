@@ -163,4 +163,15 @@ class DepositServiceTest extends TestCase
 
         $this->depositService->deposit(1, 1, '100.00');
     }
+
+    public function testDepositThrowsWhenWalletIsClosed(): void
+    {
+        $this->walletRepository->method('findById')->willReturn(WalletFixture::create(1, 1, Currency::PLN, closed: true));
+        $this->walletRepository->expects(self::never())->method('save');
+
+        $this->expectException(WalletNotFoundException::class);
+        $this->expectExceptionMessage('Wallet 1 not found.');
+
+        $this->depositService->deposit(1, 1, '100.00');
+    }
 }

@@ -307,6 +307,22 @@ class TransactionProcessorServiceTest extends TestCase
         self::assertSame(1, $this->transactionManager->calls);
     }
 
+    public function testCompleteRejectsAndReleasesWhenTargetWalletClosed(): void
+    {
+        $fromWallet = WalletFixture::create(1, 1, Currency::PLN, '500.00', '100.00');
+        $toWallet = WalletFixture::create(2, 1, Currency::EUR, closed: true);
+        $this->givenWallets($fromWallet, $toWallet);
+        $transaction = $this->makeTransaction(requiresAntiFraudCheck: false);
+
+        $this->companyWalletRepository->expects(self::never())->method('addToBalance');
+
+        $this->transactionProcessorService->complete($transaction);
+
+        self::assertSame(TransactionStatus::REJECTED, $transaction->getStatus());
+        self::assertSame('500.00', $fromWallet->getBalance()->toString());
+        self::assertSame('0.00', $fromWallet->getReserved()->toString());
+    }
+
     private function givenWallets(Wallet $fromWallet, Wallet $toWallet): void
     {
         $this->walletRepository

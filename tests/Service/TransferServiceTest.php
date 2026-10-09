@@ -347,6 +347,28 @@ class TransferServiceTest extends TestCase
         $this->transferService->transfer(1, 1, 2, '100.00');
     }
 
+    public function testTransferThrowsWhenSourceWalletIsClosed(): void
+    {
+        $this->givenWallets(WalletFixture::create(1, 1, Currency::PLN, closed: true), WalletFixture::create(2, 1, Currency::EUR));
+        $this->transactionRepository->expects(self::never())->method('save');
+
+        $this->expectException(WalletNotFoundException::class);
+        $this->expectExceptionMessage('Wallet 1 not found.');
+
+        $this->makeServiceWithRealRates()->transfer(1, 1, 2, '10.00');
+    }
+
+    public function testTransferThrowsWhenTargetWalletIsClosed(): void
+    {
+        $this->givenWallets(WalletFixture::create(1, 1, Currency::PLN, '100.00'), WalletFixture::create(2, 1, Currency::EUR, closed: true));
+        $this->transactionRepository->expects(self::never())->method('save');
+
+        $this->expectException(WalletNotFoundException::class);
+        $this->expectExceptionMessage('Wallet 2 not found.');
+
+        $this->makeServiceWithRealRates()->transfer(1, 1, 2, '10.00');
+    }
+
     private function givenWallets(Wallet $fromWallet, Wallet $toWallet): void
     {
         $this->walletRepository
