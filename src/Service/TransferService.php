@@ -5,12 +5,17 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Entity\Transaction;
+use App\Exception\InvalidMoneyAmountException;
 use App\Exception\WalletNotFoundException;
 use App\Repository\TransactionRepositoryInterface;
 use App\Repository\WalletRepositoryInterface;
+use App\ValueObject\Money;
+use RoundingMode;
 
 readonly class TransferService
 {
+    public const string ANTI_FRAUD_THRESHOLD = '15000';
+
     public function __construct(
         private WalletRepositoryInterface $walletRepository,
         private TransactionRepositoryInterface $transactionRepository,
@@ -19,6 +24,10 @@ readonly class TransferService
     ) {
     }
 
+    /**
+     * @throws WalletNotFoundException
+     * @throws InvalidMoneyAmountException
+     */
     public function transfer(
         int $userId,
         int $fromWalletId,
@@ -38,15 +47,14 @@ readonly class TransferService
         $fromCurrency = $fromWallet->getCurrency();
         $toCurrency = $toWallet->getCurrency();
 
+        $fromMoney = Money::of($fromAmount, $fromCurrency);
         $exchangeRate = $this->exchangeRateService->getExchangeRateBetween($fromCurrency, $toCurrency);
-        $rawToAmount = (float) $fromAmount * $exchangeRate;
-        $spread = $this->spreadService->calculateSpread($rawToAmount, $fromCurrency, $toCurrency);
-        $toAmount = $rawToAmount - (float) $spread;
+        $grossToAmount = $fromMoney->convertTo($toCurrency, $exchangeRate, RoundingMode::HalfAwayFromZero);
+        $spread = $this->spreadService->calculateSpread($grossToAmount, $fromCurrency, $toCurrency);
+        $toAmount = $grossToAmount->subtract($spread);
 
-        $toAmountFormatted = number_format($toAmount, 4, '.', '');
-
-        $fromWallet->setBalance($fromWallet->getBalance() - (float) $fromAmount);
-        $toWallet->setBalance($toWallet->getBalance() + (float) $toAmountFormatted);
+        $fromWallet->setBalance($fromWallet->getBalance()->subtract($fromMoney));
+        $toWallet->setBalance($toWallet->getBalance()->add($toAmount));
 
         $this->walletRepository->save($fromWallet);
         $this->walletRepository->save($toWallet);
@@ -54,13 +62,11 @@ readonly class TransferService
         $transaction = Transaction::create(
             fromWalletId: $fromWalletId,
             toWalletId: $toWalletId,
-            fromAmount: $fromAmount,
-            toAmount: $toAmountFormatted,
-            fromCurrency: $fromCurrency,
-            toCurrency: $toCurrency,
+            fromAmount: $fromMoney,
+            toAmount: $toAmount,
             spread: $spread,
-            exchangeRate: number_format($exchangeRate, 6, '.', ''),
-            requiresAntiFraudCheck: $toAmount > 15_000,
+            exchangeRate: $exchangeRate,
+            requiresAntiFraudCheck: $toAmount->isGreaterThan(Money::of(self::ANTI_FRAUD_THRESHOLD, $toCurrency)),
         );
 
         $this->transactionRepository->save($transaction);

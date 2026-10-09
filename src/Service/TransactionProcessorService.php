@@ -29,10 +29,10 @@ final readonly class TransactionProcessorService
             return;
         }
 
-        $fromWallet->setBalance($fromWallet->getBalance() - (float) $transaction->getFromAmount());
+        $fromWallet->setBalance($fromWallet->getBalance()->subtract($transaction->getFromAmount()));
         $fromWallet->setLastActivityAt(new DateTimeImmutable());
 
-        $toWallet->setBalance($toWallet->getBalance() + (float) $transaction->getToAmount());
+        $toWallet->setBalance($toWallet->getBalance()->add($transaction->getToAmount()));
         $toWallet->setLastActivityAt(new DateTimeImmutable());
 
         $this->walletRepository->save($fromWallet);

@@ -11,6 +11,8 @@ use App\Enum\TransactionStatus;
 use App\Repository\TransactionRepositoryInterface;
 use App\Repository\WalletRepositoryInterface;
 use App\Service\TransactionProcessorService;
+use App\ValueObject\ExchangeRate;
+use App\ValueObject\Money;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 
@@ -35,10 +37,10 @@ class TransactionProcessorServiceTest extends TestCase
     public function testCompleteUpdatesWalletBalancesAndSetsCompletedStatus(): void
     {
         $fromWallet = Wallet::create(1, Currency::PLN);
-        $fromWallet->setBalance(500.0);
+        $fromWallet->setBalance(Money::of('500.00', Currency::PLN));
 
         $toWallet = Wallet::create(1, Currency::EUR);
-        $toWallet->setBalance(100.0);
+        $toWallet->setBalance(Money::of('100.00', Currency::EUR));
 
         $transaction = $this->makeTransaction(requiresAntiFraudCheck: false);
 
@@ -61,8 +63,8 @@ class TransactionProcessorServiceTest extends TestCase
 
         $this->transactionProcessorService->complete($transaction);
 
-        self::assertSame(400.0, $fromWallet->getBalance());
-        self::assertSame(125.0, $toWallet->getBalance());
+        self::assertSame('400.00', $fromWallet->getBalance()->toString());
+        self::assertSame('125.00', $toWallet->getBalance()->toString());
         self::assertNotNull($fromWallet->getLastActivityAt());
         self::assertNotNull($toWallet->getLastActivityAt());
         self::assertSame(TransactionStatus::COMPLETED, $transaction->getStatus());
@@ -72,7 +74,7 @@ class TransactionProcessorServiceTest extends TestCase
     public function testCompleteSetsAntiFraudCheckedAtWhenRequired(): void
     {
         $fromWallet = Wallet::create(1, Currency::PLN);
-        $fromWallet->setBalance(500.0);
+        $fromWallet->setBalance(Money::of('500.00', Currency::PLN));
 
         $toWallet = Wallet::create(1, Currency::EUR);
 
@@ -112,7 +114,7 @@ class TransactionProcessorServiceTest extends TestCase
     public function testCompleteRejectsWhenToWalletNotFound(): void
     {
         $fromWallet = Wallet::create(1, Currency::PLN);
-        $fromWallet->setBalance(500.0);
+        $fromWallet->setBalance(Money::of('500.00', Currency::PLN));
 
         $transaction = $this->makeTransaction(requiresAntiFraudCheck: false);
 
@@ -171,12 +173,10 @@ class TransactionProcessorServiceTest extends TestCase
         return Transaction::create(
             fromWalletId: 1,
             toWalletId: 2,
-            fromAmount: '100.0000',
-            toAmount: '25.0000',
-            fromCurrency: Currency::PLN,
-            toCurrency: Currency::EUR,
-            spread: '0.5000',
-            exchangeRate: '0.250000',
+            fromAmount: Money::of('100.00', Currency::PLN),
+            toAmount: Money::of('25.00', Currency::EUR),
+            spread: Money::of('0.50', Currency::EUR),
+            exchangeRate: ExchangeRate::of(Currency::PLN, Currency::EUR, '0.25'),
             requiresAntiFraudCheck: $requiresAntiFraudCheck,
         );
     }
