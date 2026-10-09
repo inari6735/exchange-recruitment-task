@@ -12,6 +12,8 @@ use App\Exception\InvalidMoneyAmountException;
 use App\Exception\SameWalletTransferException;
 use App\Exception\WalletAlreadyExistsException;
 use App\Exception\WalletBlockedException;
+use App\Exception\WalletHasPendingTransfersException;
+use App\Exception\WalletNotEmptyException;
 use App\Exception\WalletNotFoundException;
 use App\ValueObject\Money;
 use Generator;
@@ -53,6 +55,8 @@ class ApiExceptionListenerTest extends TestCase
         yield 'same wallet' => [new SameWalletTransferException(), 400];
         yield 'blocked' => [new WalletBlockedException(3), 422];
         yield 'insufficient funds' => [new InsufficientFundsException(3), 422];
+        yield 'not empty' => [new WalletNotEmptyException(3), 422];
+        yield 'pending transfers' => [new WalletHasPendingTransfersException(3), 422];
     }
 
     public function testValidationFailureReturnsFirstViolation(): void

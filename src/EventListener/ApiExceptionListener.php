@@ -10,6 +10,8 @@ use App\Exception\InvalidMoneyAmountException;
 use App\Exception\SameWalletTransferException;
 use App\Exception\WalletAlreadyExistsException;
 use App\Exception\WalletBlockedException;
+use App\Exception\WalletHasPendingTransfersException;
+use App\Exception\WalletNotEmptyException;
 use App\Exception\WalletNotFoundException;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -40,6 +42,8 @@ final readonly class ApiExceptionListener
         SameWalletTransferException::class => Response::HTTP_BAD_REQUEST,
         WalletBlockedException::class => Response::HTTP_UNPROCESSABLE_ENTITY,
         InsufficientFundsException::class => Response::HTTP_UNPROCESSABLE_ENTITY,
+        WalletNotEmptyException::class => Response::HTTP_UNPROCESSABLE_ENTITY,
+        WalletHasPendingTransfersException::class => Response::HTTP_UNPROCESSABLE_ENTITY,
     ];
 
     public function __invoke(ExceptionEvent $event): void
