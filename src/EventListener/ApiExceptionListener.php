@@ -22,6 +22,8 @@ use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
 use Throwable;
 
+use function is_object;
+
 /**
  * Turns domain and HTTP exceptions raised under /api into {"error": "..."} JSON responses.
  * Unknown exceptions are left to Symfony (they stay 500).
@@ -68,8 +70,7 @@ final readonly class ApiExceptionListener
         $previous = $exception->getPrevious();
 
         $message = match (true) {
-            $previous instanceof ValidationFailedException && \is_object($previous->getValue())
-                => (string) $previous->getViolations()->get(0)->getMessage(),
+            $previous instanceof ValidationFailedException && is_object($previous->getValue()) => (string) $previous->getViolations()->get(0)->getMessage(),
             $exception instanceof UnsupportedMediaTypeHttpException => 'Unsupported content type, expected application/json.',
             Response::HTTP_BAD_REQUEST === $status => 'Invalid JSON body.',
             $exception instanceof NotFoundHttpException => 'Not found.',

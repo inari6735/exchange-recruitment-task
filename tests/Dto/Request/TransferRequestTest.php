@@ -11,6 +11,8 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Validator\Validation;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
+use function count;
+
 class TransferRequestTest extends TestCase
 {
     private ValidatorInterface $validator;
@@ -38,7 +40,7 @@ class TransferRequestTest extends TestCase
     {
         $violations = $this->validator->validate(new TransferRequest(...$fields));
 
-        self::assertGreaterThan(0, \count($violations));
+        self::assertGreaterThan(0, count($violations));
         self::assertSame($expectedMessage, $violations[0]->getMessage());
     }
 

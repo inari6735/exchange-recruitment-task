@@ -95,6 +95,10 @@ php bin/console doctrine:migrations:migrate -n --env=test
 
 All endpoints require Bearer token authentication. Obtain a token with `app:create-user`.
 
+Requests with a body must be sent as JSON with the `Content-Type: application/json` header (otherwise `415`).
+Errors are returned as JSON: `{ "error": "<message>" }` — `400` for invalid input or malformed JSON, `404` for
+unknown wallets, `409` for a duplicate wallet, `422` for blocked wallets or insufficient funds.
+
 | Method | Path                        | Description                                                                                                                                                                            |
 |--------|-----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `GET`  | `/api/wallets`              | List all wallets belonging to the authenticated user. Each wallet shows balance, reserved and available amounts.                                                                                                                                  |
