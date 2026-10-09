@@ -23,6 +23,20 @@ How transfers, reservations, processing and limits work is described in [docs/bu
 
 ---
 
+## Changes
+
+| What changed | Why |
+|--------------|-----|
+| Amounts use a `Money` value object (bcmath) with per-currency precision (JPY 0, others 2); `wallets.balance` is `DECIMAL`. | Floats caused rounding errors in balances. |
+| A transfer only **reserves** funds; `app:process-transactions` settles or releases the reservation exactly once and books the spread to the company wallet. | Transfers were booked twice, rejected transfers kept moved money, and the spread was never earned. |
+| Transfers check available funds, blocked source/target wallets and same-wallet transfers. | Balances could go negative; blocked wallets could still send money. |
+| Every balance change runs in one database transaction with wallet rows locked in ascending id order. | Concurrent requests could overwrite each other's balances. |
+| Anti-fraud threshold and deposit limit are configured per currency (`config/services.yaml`). | A single value meant very different limits in JPY vs GBP. |
+| Request bodies are validated by DTOs (`#[MapRequestPayload]` + Symfony Validator); errors are mapped to JSON in one listener. | Hand-written parsing in the controller; malformed input returned `500`. Existing responses are unchanged. |
+| New `DELETE /api/wallets/{id}` closes (soft-deletes) an empty wallet. | Wallets could not be removed; history must be kept. |
+
+---
+
 ## Prerequisites
 
 Make sure you have [Docker](https://www.docker.com/get-started) and [Docker Compose](https://docs.docker.com/compose/)
