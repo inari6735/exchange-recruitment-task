@@ -9,6 +9,8 @@ use App\Enum\Currency;
 use App\Exception\CurrencyMismatchException;
 use App\Exception\InsufficientFundsException;
 use App\Exception\WalletBlockedException;
+use App\Exception\WalletHasPendingTransfersException;
+use App\Exception\WalletNotEmptyException;
 use App\Tests\Support\WalletFixture;
 use App\ValueObject\Money;
 use DateTimeImmutable;
@@ -258,5 +260,93 @@ class WalletTest extends TestCase
         yield 'reserve' => ['reserve'];
         yield 'release' => ['release'];
         yield 'settle' => ['settle'];
+    }
+
+    public function testCreatedWalletIsOpen(): void
+    {
+        $wallet = Wallet::create(userId: 1, currency: Currency::PLN);
+
+        $this->assertFalse($wallet->isClosed());
+        $this->assertNull($wallet->getClosedAt());
+    }
+
+    public function testCloseEmptyWallet(): void
+    {
+        $wallet = WalletFixture::create(7, 1, Currency::PLN);
+        $at = new DateTimeImmutable('2026-10-09 12:00:00');
+
+        $wallet->close($at);
+
+        $this->assertTrue($wallet->isClosed());
+        $this->assertSame($at, $wallet->getClosedAt());
+        $this->assertSame('0.00', $wallet->getBalance()->toString());
+    }
+
+    public function testCloseRejectsNonZeroBalance(): void
+    {
+        $wallet = WalletFixture::create(7, 1, Currency::PLN, '0.01');
+
+        $this->expectException(WalletNotEmptyException::class);
+        $this->expectExceptionMessage('Wallet 7 has a non-zero balance.');
+
+        $wallet->close(new DateTimeImmutable());
+    }
+
+    public function testCloseRejectsNegativeLegacyBalance(): void
+    {
+        $wallet = WalletFixture::create(7, 1, Currency::PLN, '-995.00');
+
+        $this->expectException(WalletNotEmptyException::class);
+
+        $wallet->close(new DateTimeImmutable());
+    }
+
+    public function testCloseRejectsReservation(): void
+    {
+        $wallet = WalletFixture::create(7, 1, Currency::PLN, '0', '5.00');
+
+        $this->expectException(WalletHasPendingTransfersException::class);
+        $this->expectExceptionMessage('Wallet 7 has pending transfers.');
+
+        $wallet->close(new DateTimeImmutable());
+    }
+
+    public function testCloseRejectsBlockedWallet(): void
+    {
+        $wallet = WalletFixture::create(7, 1, Currency::PLN, blocked: true);
+
+        $this->expectException(WalletBlockedException::class);
+        $this->expectExceptionMessage('Wallet 7 is blocked.');
+
+        $wallet->close(new DateTimeImmutable());
+    }
+
+    public function testCloseRejectsAlreadyClosedWallet(): void
+    {
+        $wallet = WalletFixture::create(7, 1, Currency::PLN, closed: true);
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('Wallet 7 is closed.');
+
+        $wallet->close(new DateTimeImmutable());
+    }
+
+    public function testCreditRejectsClosedWallet(): void
+    {
+        $wallet = WalletFixture::create(7, 1, Currency::PLN, closed: true);
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('Wallet 7 is closed.');
+
+        $wallet->credit(Money::of('1.00', Currency::PLN));
+    }
+
+    public function testReserveRejectsClosedWallet(): void
+    {
+        $wallet = WalletFixture::create(7, 1, Currency::PLN, '100.00', closed: true);
+
+        $this->expectException(LogicException::class);
+
+        $wallet->reserve(Money::of('1.00', Currency::PLN));
     }
 }

@@ -8,6 +8,8 @@ use App\Enum\Currency;
 use App\Exception\CurrencyMismatchException;
 use App\Exception\InsufficientFundsException;
 use App\Exception\WalletBlockedException;
+use App\Exception\WalletHasPendingTransfersException;
+use App\Exception\WalletNotEmptyException;
 use App\ValueObject\Money;
 use DateTimeImmutable;
 use InvalidArgumentException;
@@ -27,6 +29,7 @@ class Wallet
         private bool $isBlocked,
         private ?DateTimeImmutable $lastActivityAt,
         private readonly DateTimeImmutable $createdAt,
+        private ?DateTimeImmutable $closedAt = null,
     ) {
         $this->assertCurrency($balance);
         $this->assertCurrency($reserved);
@@ -91,6 +94,16 @@ class Wallet
         return $this->createdAt;
     }
 
+    public function getClosedAt(): ?DateTimeImmutable
+    {
+        return $this->closedAt;
+    }
+
+    public function isClosed(): bool
+    {
+        return null !== $this->closedAt;
+    }
+
     public function setIsBlocked(bool $isBlocked): void
     {
         $this->isBlocked = $isBlocked;
@@ -107,6 +120,7 @@ class Wallet
     public function credit(Money $amount): void
     {
         $this->assertPositive($amount);
+        $this->assertOpen();
         $this->assertNotBlocked();
 
         $this->balance = $this->balance->add($amount);
@@ -118,6 +132,7 @@ class Wallet
     public function reserve(Money $amount): void
     {
         $this->assertPositive($amount);
+        $this->assertOpen();
         $this->assertNotBlocked();
 
         if ($amount->isGreaterThan($this->getAvailable())) {
@@ -151,6 +166,26 @@ class Wallet
         $this->reserved = $this->reserved->subtract($amount);
     }
 
+    /**
+     * Closes an empty, unblocked wallet with nothing reserved. Pending transfers *to* the wallet are checked by
+     * WalletService, which can see transactions.
+     */
+    public function close(DateTimeImmutable $at): void
+    {
+        $this->assertOpen();
+        $this->assertNotBlocked();
+
+        if (!$this->balance->equals(Money::zero($this->currency))) {
+            throw new WalletNotEmptyException($this->id ?? 0);
+        }
+
+        if (!$this->reserved->equals(Money::zero($this->currency))) {
+            throw new WalletHasPendingTransfersException($this->id ?? 0);
+        }
+
+        $this->closedAt = $at;
+    }
+
     private function assertCurrency(Money $money): void
     {
         if ($money->getCurrency() !== $this->currency) {
@@ -164,6 +199,13 @@ class Wallet
 
         if (!$amount->isGreaterThan(Money::zero($this->currency))) {
             throw new InvalidArgumentException('Amount must be positive.');
+        }
+    }
+
+    private function assertOpen(): void
+    {
+        if ($this->isClosed()) {
+            throw new LogicException(sprintf('Wallet %d is closed.', $this->id ?? 0));
         }
     }
 

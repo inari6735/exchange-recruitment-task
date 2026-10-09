@@ -21,6 +21,7 @@ final class WalletFixture
         string $balance = '0',
         string $reserved = '0',
         bool $blocked = false,
+        bool $closed = false,
     ): Wallet {
         return new Wallet(
             id: $id,
@@ -31,6 +32,7 @@ final class WalletFixture
             isBlocked: $blocked,
             lastActivityAt: null,
             createdAt: new DateTimeImmutable(),
+            closedAt: $closed ? new DateTimeImmutable('-1 day') : null,
         );
     }
 }
