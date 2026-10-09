@@ -49,7 +49,7 @@ class ApiExceptionListenerTest extends TestCase
     public static function domainExceptionProvider(): Generator
     {
         yield 'not found' => [new WalletNotFoundException(7), 404];
-        yield 'already exists' => [new WalletAlreadyExistsException(1, Currency::PLN), 409];
+        yield 'already exists' => [new WalletAlreadyExistsException(Currency::PLN), 409];
         yield 'invalid money' => [InvalidMoneyAmountException::tooManyDecimalPlaces(Currency::PLN), 400];
         yield 'deposit limit' => [new DepositLimitExceededException(Money::of('2500', Currency::EUR)), 400];
         yield 'same wallet' => [new SameWalletTransferException(), 400];

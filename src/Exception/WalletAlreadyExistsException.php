@@ -9,10 +9,11 @@ use RuntimeException;
 
 final class WalletAlreadyExistsException extends RuntimeException
 {
-    public function __construct(int $userId, Currency $currency)
+    /**
+     * The message is returned to API clients, so it must not contain internal identifiers (e.g. the user id).
+     */
+    public function __construct(Currency $currency)
     {
-        parent::__construct(
-            sprintf('Wallet for user %d in currency %s already exists.', $userId, $currency->value),
-        );
+        parent::__construct(sprintf('Wallet in currency %s already exists.', $currency->value));
     }
 }

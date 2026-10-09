@@ -31,7 +31,7 @@ readonly class WalletService
         $existing = $this->walletRepository->findByUserIdAndCurrency($userId, $currency);
 
         if (null !== $existing) {
-            throw new WalletAlreadyExistsException($userId, $currency);
+            throw new WalletAlreadyExistsException($currency);
         }
 
         $wallet = Wallet::create($userId, $currency);

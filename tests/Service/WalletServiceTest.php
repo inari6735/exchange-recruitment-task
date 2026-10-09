@@ -84,7 +84,7 @@ class WalletServiceTest extends TestCase
             ->method('save');
 
         $this->expectException(WalletAlreadyExistsException::class);
-        $this->expectExceptionMessage('Wallet for user 1 in currency PLN already exists.');
+        $this->expectExceptionMessage('Wallet in currency PLN already exists.');
 
         $this->walletService->createWallet($userId, $currency);
     }

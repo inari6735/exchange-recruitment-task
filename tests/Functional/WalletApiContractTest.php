@@ -81,10 +81,8 @@ class WalletApiContractTest extends ApiTestCase
         $response = $this->sendJson('POST', '/api/wallets', $token, ['currency' => 'PLN']);
 
         self::assertSame(409, $response['status']);
-        self::assertSame(
-            ['error' => sprintf('Wallet for user %d in currency PLN already exists.', $user->getIdNotNull())],
-            $response['body'],
-        );
+        // The message must not expose the internal user id.
+        self::assertSame(['error' => 'Wallet in currency PLN already exists.'], $response['body']);
     }
 
     // ---- GET /api/wallets ----
