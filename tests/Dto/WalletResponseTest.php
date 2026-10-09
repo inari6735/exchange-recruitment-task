@@ -54,7 +54,7 @@ class WalletResponseTest extends TestCase
     public function testJsonSerializeBalanceAsStringInCurrencyScale(): void
     {
         $wallet = Wallet::create(1, Currency::JPY);
-        $wallet->setBalance(Money::of('1250', Currency::JPY));
+        $wallet->credit(Money::of('1250', Currency::JPY));
 
         $data = new WalletResponse($wallet)->jsonSerialize();
 

@@ -8,6 +8,7 @@ use App\Enum\Currency;
 use App\Exception\CurrencyMismatchException;
 use App\ValueObject\Money;
 use DateTimeImmutable;
+use InvalidArgumentException;
 
 class CompanyWallet
 {
@@ -59,10 +60,15 @@ class CompanyWallet
         return $this->updatedAt;
     }
 
-    public function setBalance(Money $balance): void
+    public function credit(Money $amount): void
     {
-        $this->assertBalanceCurrency($balance);
-        $this->balance = $balance;
+        $this->assertBalanceCurrency($amount);
+
+        if (!$amount->isGreaterThan(Money::zero($this->currency))) {
+            throw new InvalidArgumentException('Amount must be positive.');
+        }
+
+        $this->balance = $this->balance->add($amount);
     }
 
     private function assertBalanceCurrency(Money $balance): void

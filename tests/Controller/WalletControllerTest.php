@@ -380,7 +380,7 @@ class WalletControllerTest extends TestCase
     {
         $user = new User(1, 'test@example.com', ['ROLE_USER'], new DateTimeImmutable());
         $wallet = Wallet::create(1, Currency::PLN);
-        $wallet->setBalance(Money::of('1250.5', Currency::PLN));
+        $wallet->credit(Money::of('1250.5', Currency::PLN));
 
         $this->walletRepository
             ->method('findByUserId')

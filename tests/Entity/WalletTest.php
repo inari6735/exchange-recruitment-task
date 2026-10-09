@@ -33,23 +33,6 @@ class WalletTest extends TestCase
         $this->assertNull($wallet->getLastActivityAt());
     }
 
-    public function testSetBalance(): void
-    {
-        $wallet = Wallet::create(userId: 1, currency: Currency::PLN);
-        $wallet->setBalance(Money::of('150.50', Currency::PLN));
-
-        $this->assertSame('150.50', $wallet->getBalance()->toString());
-    }
-
-    public function testSetBalanceRejectsDifferentCurrency(): void
-    {
-        $wallet = Wallet::create(userId: 1, currency: Currency::PLN);
-
-        $this->expectException(CurrencyMismatchException::class);
-
-        $wallet->setBalance(Money::of('1.00', Currency::EUR));
-    }
-
     public function testConstructorRejectsBalanceInDifferentCurrency(): void
     {
         $this->expectException(CurrencyMismatchException::class);

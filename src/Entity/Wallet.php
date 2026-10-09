@@ -91,12 +91,6 @@ class Wallet
         return $this->createdAt;
     }
 
-    public function setBalance(Money $balance): void
-    {
-        $this->assertCurrency($balance);
-        $this->balance = $balance;
-    }
-
     public function setIsBlocked(bool $isBlocked): void
     {
         $this->isBlocked = $isBlocked;

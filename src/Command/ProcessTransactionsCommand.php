@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Command;
 
 use App\Enum\TransactionStatus;
+use App\Exception\TransactionAlreadyProcessedException;
 use App\Repository\TransactionRepositoryInterface;
 use App\Service\TransactionProcessorService;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -37,12 +38,18 @@ final class ProcessTransactionsCommand extends Command
         }
 
         foreach ($pending as $transaction) {
-            $this->transactionProcessorService->complete($transaction);
+            try {
+                $this->transactionProcessorService->complete($transaction);
+            } catch (TransactionAlreadyProcessedException) {
+                $io->warning(sprintf('Transaction #%d was already processed, skipped.', $transaction->getId()));
+
+                continue;
+            }
 
             if (TransactionStatus::COMPLETED === $transaction->getStatus()) {
                 $io->success(sprintf('Transaction #%d completed.', $transaction->getId()));
             } else {
-                $io->warning(sprintf('Transaction #%d rejected (wallet not found).', $transaction->getId()));
+                $io->warning(sprintf('Transaction #%d rejected (wallet not found or blocked).', $transaction->getId()));
             }
         }
 
@@ -59,17 +66,24 @@ final class ProcessTransactionsCommand extends Command
 
             $approved = $io->confirm('Approve this transaction?');
 
-            if ($approved) {
-                $this->transactionProcessorService->complete($transaction);
-
-                if (TransactionStatus::COMPLETED === $transaction->getStatus()) {
-                    $io->success(sprintf('Transaction #%d approved and completed.', $transaction->getId()));
+            try {
+                if ($approved) {
+                    $this->transactionProcessorService->complete($transaction);
                 } else {
-                    $io->warning(sprintf('Transaction #%d rejected (wallet not found).', $transaction->getId()));
+                    $this->transactionProcessorService->reject($transaction);
                 }
-            } else {
-                $this->transactionProcessorService->reject($transaction);
+            } catch (TransactionAlreadyProcessedException) {
+                $io->warning(sprintf('Transaction #%d was already processed, skipped.', $transaction->getId()));
+
+                continue;
+            }
+
+            if (!$approved) {
                 $io->warning(sprintf('Transaction #%d rejected.', $transaction->getId()));
+            } elseif (TransactionStatus::COMPLETED === $transaction->getStatus()) {
+                $io->success(sprintf('Transaction #%d approved and completed.', $transaction->getId()));
+            } else {
+                $io->warning(sprintf('Transaction #%d rejected (wallet not found or blocked).', $transaction->getId()));
             }
         }
 
