@@ -17,9 +17,10 @@ use App\Service\WalletService;
 use App\Tests\Support\ImmediateTransactionManager;
 use App\Tests\Support\WalletFixture;
 use Generator;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Throwable;
 
 #[AllowMockObjectsWithoutExpectations]
 class WalletServiceTest extends TestCase
@@ -144,7 +145,7 @@ class WalletServiceTest extends TestCase
     }
 
     /**
-     * @param class-string<\Throwable> $exception
+     * @param class-string<Throwable> $exception
      */
     #[DataProvider('refusalProvider')]
     public function testCloseRefusals(Wallet $wallet, bool $inFlight, string $exception, string $message): void

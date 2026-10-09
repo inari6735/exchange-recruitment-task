@@ -104,6 +104,7 @@ unknown wallets, `409` for a duplicate wallet, `422` for blocked wallets or insu
 | `GET`  | `/api/wallets`              | List all wallets belonging to the authenticated user. Each wallet shows balance, reserved and available amounts.                                                                                                                                  |
 | `POST` | `/api/wallets`              | Create a new wallet. Body: `{ "currency": "PLN" }`. Supported currencies: `PLN`, `EUR`, `USD`, `GBP`, `JPY`, `CHF`, `HUF`. Returns `409` if a wallet for that currency already exists. |
 | `POST` | `/api/wallets/{id}/deposit` | Deposit funds into a wallet. Body: `{ "amount": "500.00" }`. The maximum single deposit depends on the currency (see docs/business-logic.md). Returns 422 if the wallet is blocked.                                                  |
+| `DELETE` | `/api/wallets/{id}`       | Close (soft-delete) an empty wallet. Returns `204`. Returns `422` if the wallet is blocked, has a non-zero balance or pending transfers. A closed wallet is no longer listed and behaves as not found. |
 | `POST` | `/api/wallets/transfer`     | Transfer funds between two wallets of the authenticated user (currency exchange supported). Body: `{ "fromWalletId": 1, "toWalletId": 2, "amount": "100.00" }`. Reserves the amount until the transfer is processed. Returns 422 when funds are insufficient or a wallet is blocked.                        |
 
 **Amounts.** Request `amount` may be a decimal string (`"100.50"`) or a JSON number (`100.5`). It must be positive and

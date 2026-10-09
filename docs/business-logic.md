@@ -71,6 +71,22 @@ A deposit adds money to the wallet's balance. It is refused when the wallet does
 else (`404`), the amount does not fit the currency (`400`), the amount is above the currency's deposit limit
 (`400` Amount cannot exceed {limit} {CUR}.), or the wallet is blocked (`422`).
 
+## Closing a wallet — `DELETE /api/wallets/{id}`
+
+Closing is a soft delete: the wallet disappears from the API but stays in the database with its full
+transaction history. Only an empty wallet can be closed, so no money is ever lost and every transfer can still
+be settled.
+
+| Check (in this order)                                              | Response                                   |
+|--------------------------------------------------------------------|--------------------------------------------|
+| wallet exists, belongs to the user and is not closed yet           | `404` Wallet {id} not found.               |
+| wallet is not blocked                                              | `422` Wallet {id} is blocked.              |
+| balance is exactly zero                                            | `422` Wallet {id} has a non-zero balance.  |
+| no `pending` / `fraud_review` transfer from or to the wallet        | `422` Wallet {id} has pending transfers.   |
+
+On success the API returns `204`. A closed wallet behaves like one that does not exist: it is not listed,
+deposits and transfers from or to it get `404`, and the user can open a new wallet in the same currency.
+
 ## Limits
 
 Configured per currency in `config/services.yaml` (`app.limits.*`):
