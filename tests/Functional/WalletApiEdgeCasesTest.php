@@ -154,6 +154,16 @@ class WalletApiEdgeCasesTest extends ApiTestCase
         self::assertSame(['error' => 'Not found.'], $response['body']);
     }
 
+    public function testHugeWalletIdInDepositPathIsNotAServerError(): void
+    {
+        [, $token] = $this->createUserWithToken();
+
+        $response = $this->sendJson('POST', '/api/wallets/99999999999999999999/deposit', $token, ['amount' => '1.00']);
+
+        self::assertSame(404, $response['status']);
+        self::assertSame(['error' => 'Not found.'], $response['body']);
+    }
+
     public function testWrongMethodIsJson(): void
     {
         [, $token] = $this->createUserWithToken();

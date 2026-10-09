@@ -56,7 +56,11 @@ błąd. Kwota przyjmowana jako string dziesiętny lub liczba JSON (jak dziś).
 | body będące skalarem JSON (np. `5`)               | 400 `Missing required field: …`       | bez zmian — 400 `Missing required field: …` (serializer daje pusty obiekt) |
 | `"currency": ["PLN"]` (nie-string)                | 500                                   | 400 `Invalid currency.`                                    |
 | `"fromWalletId": "abc"` / `0` / `-1` / `1.5` / `true` | 404 `Wallet 0 not found.` lub rzutowanie | 400 `fromWalletId must be a positive integer.` (analogicznie `toWalletId`) |
-| `/api/wallets/abc/deposit`                         | 500                                   | 404 `Not found.`                                           |
+| `"fromWalletId": 1.0` / `"012"` / `" 12"`          | 201 (rzutowanie `(int)`)              | 400 `fromWalletId must be a positive integer.`             |
+| złe ID **i** zła kwota naraz                       | 400 `Amount must be a positive number.` | 400 `<field> must be a positive integer.` (kolejność pól)  |
+| `/api/wallets/abc/deposit`, `/api/wallets/{>18 cyfr}/deposit` | 500                        | 404 `Not found.`                                           |
+| `/api/wallets/-1/deposit`                          | 404 `Wallet -1 not found.`            | 404 `Not found.`                                           |
+| brak tokena                                        | 401 HTML                              | 401 `{"error": "Unauthorized"}` (listener obejmuje błędy HTTP z firewalla) |
 | inny błąd HTTP w `/api/*` (np. 405)                | HTML                                  | JSON `{"error": "<standardowy opis statusu>"}`             |
 
 Identyfikatory portfeli w body: liczba całkowita JSON (`12`) lub ciąg cyfr (`"12"`), dodatnie.
@@ -142,7 +146,6 @@ README: sekcja API — wymagany nagłówek `Content-Type: application/json`, for
 
 ## Poza zakresem
 
-- `401` bez tokena zwracane jako HTML (entry point authenticatora).
 - Domyślne zatwierdzanie fraud review w `app:process-transactions -n`.
 - Aktualizacja podatnych zależności (`composer audit`).
 

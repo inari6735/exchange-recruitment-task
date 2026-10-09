@@ -70,7 +70,8 @@ final class WalletController extends AbstractController
         return new JsonResponse(new TransactionResponse($transaction), Response::HTTP_CREATED);
     }
 
-    #[Route('/{id}/deposit', requirements: ['id' => '\d+'], methods: ['POST'])]
+    // Up to 18 digits always fits in an int; longer ids cannot exist and get 404 instead of a type error.
+    #[Route('/{id}/deposit', requirements: ['id' => '\d{1,18}'], methods: ['POST'])]
     public function deposit(
         int $id,
         #[MapRequestPayload(acceptFormat: 'json', validationFailedStatusCode: Response::HTTP_BAD_REQUEST)]
