@@ -82,11 +82,52 @@ class ProcessTransactionsCommandTest extends TestCase
         self::assertStringContainsString('Transaction #8 completed.', $this->tester->getDisplay());
     }
 
-    private function makePendingTransaction(int $id): Transaction
+    public function testSkipsTransactionWhoseReservationWasAlreadyConsumedByOtherRun(): void
+    {
+        $repository = $this->createMock(TransactionRepositoryInterface::class);
+        $repository
+            ->method('findByStatus')
+            ->willReturnMap([
+                [TransactionStatus::PENDING, [$this->makePendingTransaction(7, 3), $this->makePendingTransaction(8)]],
+                [TransactionStatus::FRAUD_REVIEW, []],
+            ]);
+        $repository
+            ->method('save')
+            ->willReturnCallback(static function (Transaction $transaction): void {
+                if (7 === $transaction->getId()) {
+                    throw new TransactionAlreadyProcessedException(7);
+                }
+            });
+
+        $walletRepository = $this->createMock(WalletRepositoryInterface::class);
+        $walletRepository
+            ->method('findById')
+            ->willReturnCallback(static fn (int $id) => match ($id) {
+                1 => WalletFixture::create(1, 1, Currency::PLN, '500.00', '200.00'),
+                3 => WalletFixture::create(3, 1, Currency::PLN, '500.00', '0.00'),
+                default => WalletFixture::create(2, 1, Currency::EUR),
+            });
+
+        $processor = new TransactionProcessorService(
+            $walletRepository,
+            $repository,
+            $this->createMock(CompanyWalletRepositoryInterface::class),
+            new ImmediateTransactionManager(),
+        );
+        $tester = new CommandTester(new ProcessTransactionsCommand($repository, $processor));
+
+        $exitCode = $tester->execute([]);
+
+        self::assertSame(Command::SUCCESS, $exitCode);
+        self::assertStringContainsString('Transaction #7 was already processed, skipped.', $tester->getDisplay());
+        self::assertStringContainsString('Transaction #8 completed.', $tester->getDisplay());
+    }
+
+    private function makePendingTransaction(int $id, int $fromWalletId = 1): Transaction
     {
         return new Transaction(
             id: $id,
-            fromWalletId: 1,
+            fromWalletId: $fromWalletId,
             toWalletId: 2,
             fromAmount: Money::of('100.00', Currency::PLN),
             toAmount: Money::of('23.43', Currency::EUR),

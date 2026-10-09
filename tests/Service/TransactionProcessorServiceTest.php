@@ -197,6 +197,35 @@ class TransactionProcessorServiceTest extends TestCase
         $this->transactionProcessorService->complete($this->makeTransaction(requiresAntiFraudCheck: false));
     }
 
+    public function testCompleteOfAlreadyProcessedTransactionFailsBeforeTouchingWallets(): void
+    {
+        $this->givenWallets(WalletFixture::create(1, 1, Currency::PLN, '500.00', '0.00'), WalletFixture::create(2, 1, Currency::EUR));
+        $this->transactionRepository
+            ->method('save')
+            ->willThrowException(new TransactionAlreadyProcessedException(7));
+        $this->walletRepository->expects(self::never())->method('save');
+        $this->companyWalletRepository->expects(self::never())->method('addToBalance');
+
+        $this->expectException(TransactionAlreadyProcessedException::class);
+
+        $this->transactionProcessorService->complete($this->makeTransaction(requiresAntiFraudCheck: false));
+    }
+
+    public function testRejectOfAlreadyProcessedTransactionFailsBeforeReleasing(): void
+    {
+        $this->walletRepository
+            ->method('findById')
+            ->willReturn(WalletFixture::create(1, 1, Currency::PLN, '500.00', '0.00'));
+        $this->transactionRepository
+            ->method('save')
+            ->willThrowException(new TransactionAlreadyProcessedException(7));
+        $this->walletRepository->expects(self::never())->method('save');
+
+        $this->expectException(TransactionAlreadyProcessedException::class);
+
+        $this->transactionProcessorService->reject($this->makeTransaction(requiresAntiFraudCheck: false));
+    }
+
     public function testRejectSetsRejectedStatus(): void
     {
         $transaction = $this->makeTransaction(requiresAntiFraudCheck: false);

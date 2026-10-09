@@ -45,6 +45,11 @@ final readonly class TransactionProcessorService
                 return;
             }
 
+            // Claim the transaction first: the guarded status update fails if another run already processed it.
+            $transaction->setStatus(TransactionStatus::COMPLETED);
+            $this->markAntiFraudChecked($transaction);
+            $this->transactionRepository->save($transaction);
+
             $now = new DateTimeImmutable();
 
             $fromWallet->settle($transaction->getFromAmount());
@@ -60,10 +65,6 @@ final readonly class TransactionProcessorService
             if ($spread->isGreaterThan(Money::zero($spread->getCurrency()))) {
                 $this->companyWalletRepository->addToBalance($spread);
             }
-
-            $transaction->setStatus(TransactionStatus::COMPLETED);
-            $this->markAntiFraudChecked($transaction);
-            $this->transactionRepository->save($transaction);
         });
     }
 
@@ -83,14 +84,14 @@ final readonly class TransactionProcessorService
 
     private function rejectLocked(Transaction $transaction, ?Wallet $fromWallet): void
     {
+        $transaction->setStatus(TransactionStatus::REJECTED);
+        $this->markAntiFraudChecked($transaction);
+        $this->transactionRepository->save($transaction);
+
         if (null !== $fromWallet) {
             $fromWallet->release($transaction->getFromAmount());
             $this->walletRepository->save($fromWallet);
         }
-
-        $transaction->setStatus(TransactionStatus::REJECTED);
-        $this->markAntiFraudChecked($transaction);
-        $this->transactionRepository->save($transaction);
     }
 
     private function markAntiFraudChecked(Transaction $transaction): void
