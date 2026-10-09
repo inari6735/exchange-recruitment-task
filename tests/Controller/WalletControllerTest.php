@@ -10,6 +10,7 @@ use App\Entity\User;
 use App\Entity\Wallet;
 use App\Enum\Currency;
 use App\Enum\TransactionStatus;
+use App\Exception\DepositLimitExceededException;
 use App\Exception\InvalidMoneyAmountException;
 use App\Exception\WalletAlreadyExistsException;
 use App\Exception\WalletBlockedException;
@@ -333,22 +334,6 @@ class WalletControllerTest extends TestCase
     /**
      * @throws Throwable
      */
-    public function testDepositReturnsBadRequestWhenAmountExceedsMax(): void
-    {
-        $user = new User(1, 'test@example.com', ['ROLE_USER'], new DateTimeImmutable());
-
-        $request = new Request(content: json_encode(['amount' => '99999'], JSON_THROW_ON_ERROR));
-        $response = $this->controller->deposit(5, $request, $user);
-
-        self::assertSame(400, $response->getStatusCode());
-
-        $data = json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
-        self::assertSame(sprintf('Amount cannot exceed %s.', DepositService::MAX_AMOUNT), $data['error']);
-    }
-
-    /**
-     * @throws Throwable
-     */
     public function testDepositReturnsNotFoundWhenWalletNotFound(): void
     {
         $user = new User(1, 'test@example.com', ['ROLE_USER'], new DateTimeImmutable());
@@ -556,38 +541,40 @@ class WalletControllerTest extends TestCase
     /**
      * @throws Throwable
      */
-    public function testDepositAcceptsExactlyMaxAmount(): void
+    public function testDepositReturnsBadRequestWhenAmountExceedsCurrencyLimit(): void
+    {
+        $user = new User(1, 'test@example.com', ['ROLE_USER'], new DateTimeImmutable());
+
+        $this->depositService
+            ->method('deposit')
+            ->willThrowException(new DepositLimitExceededException(Money::of('2500', Currency::EUR)));
+
+        $request = new Request(content: json_encode(['amount' => '2500.01'], JSON_THROW_ON_ERROR));
+        $response = $this->controller->deposit(5, $request, $user);
+
+        self::assertSame(400, $response->getStatusCode());
+
+        $data = json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('Amount cannot exceed 2500.00 EUR.', $data['error']);
+    }
+
+    /**
+     * @throws Throwable
+     */
+    public function testDepositPassesLargeAmountToService(): void
     {
         $user = new User(1, 'test@example.com', ['ROLE_USER'], new DateTimeImmutable());
 
         $this->depositService
             ->expects(self::once())
             ->method('deposit')
-            ->with(1, 5, '10000.00')
-            ->willReturn(Wallet::create(1, Currency::PLN));
+            ->with(1, 5, '450000')
+            ->willReturn(Wallet::create(1, Currency::JPY));
 
-        $request = new Request(content: json_encode(['amount' => '10000.00'], JSON_THROW_ON_ERROR));
+        $request = new Request(content: json_encode(['amount' => '450000'], JSON_THROW_ON_ERROR));
         $response = $this->controller->deposit(5, $request, $user);
 
         self::assertSame(200, $response->getStatusCode());
-    }
-
-    /**
-     * @throws Throwable
-     */
-    public function testDepositReturnsBadRequestWhenAmountJustAboveMax(): void
-    {
-        $user = new User(1, 'test@example.com', ['ROLE_USER'], new DateTimeImmutable());
-
-        $this->depositService->expects(self::never())->method('deposit');
-
-        $request = new Request(content: json_encode(['amount' => '10000.01'], JSON_THROW_ON_ERROR));
-        $response = $this->controller->deposit(5, $request, $user);
-
-        self::assertSame(400, $response->getStatusCode());
-
-        $data = json_decode($response->getContent(), true, 512, JSON_THROW_ON_ERROR);
-        self::assertSame('Amount cannot exceed 10000.', $data['error']);
     }
 
     private function makeTransaction(): Transaction

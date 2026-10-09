@@ -8,6 +8,7 @@ use App\Dto\TransactionResponse;
 use App\Dto\WalletResponse;
 use App\Entity\User;
 use App\Enum\Currency;
+use App\Exception\DepositLimitExceededException;
 use App\Exception\InvalidMoneyAmountException;
 use App\Exception\WalletAlreadyExistsException;
 use App\Exception\WalletBlockedException;
@@ -125,10 +126,6 @@ final class WalletController extends AbstractController
             return new JsonResponse(['error' => 'Amount must be a positive number.'], Response::HTTP_BAD_REQUEST);
         }
 
-        if (new Number($amount)->compare(DepositService::MAX_AMOUNT) > 0) {
-            return new JsonResponse(['error' => sprintf('Amount cannot exceed %s.', DepositService::MAX_AMOUNT)], Response::HTTP_BAD_REQUEST);
-        }
-
         try {
             $wallet = $this->depositService->deposit(
                 $user->getIdNotNull(),
@@ -140,6 +137,8 @@ final class WalletController extends AbstractController
         } catch (WalletBlockedException $e) {
             return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_UNPROCESSABLE_ENTITY);
         } catch (InvalidMoneyAmountException $e) {
+            return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+        } catch (DepositLimitExceededException $e) {
             return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
         }
 

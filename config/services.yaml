@@ -31,10 +31,3 @@ services:
     arguments:
       $antiFraudThresholds: '%app.limits.anti_fraud_threshold%'
       $depositLimits: '%app.limits.deposit%'
-
-when@test:
-  services:
-    # Fetched from the container by integration tests; public so it is not removed when nothing injects it.
-    App\Repository\DbalTransactionManager:
-      autowire: true
-      public: true
